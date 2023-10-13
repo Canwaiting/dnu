@@ -1,127 +1,105 @@
 from PIL import Image
-import sqlite3
-import requests
+from peewee import Model, CharField,IntegerField, SqliteDatabase, DateTimeField
+import datetime
 import json
-import urllib.parse as p
-from datetime import datetime, timezone, timedelta
-import toml
+import requests
 import yt_dlp
-import subprocess
-import sys
+import os
 
-# 从配置文件中读取 YouTube Data API 的密钥
-config = toml.load('config.toml')
-youtube_data_api_key = config['youtube']['data_api_key']
+db = SqliteDatabase('dnu.db')
 
-video_info = {}
+class BaseModel(Model):
+    class Meta:
+        database = db
+class Video(BaseModel):
+    title = CharField(null=True)
+    description = CharField(null=True)
+    upload_date = CharField(null=True)
+    thumbnail = CharField(null=True)
+    youtube_id = CharField(null=True)
+    youtube_url = CharField(null=True)
+    channel_id = CharField(null=True)
+    channel = CharField(null=True)
+    save_name = CharField(null=True)
+    save_directory = CharField(null=True)
 
-def get_video_info() -> dict:
-    # 从视频的 URL 中解析出视频的 ID
-    url_data = p.urlparse(video_info["youtube_url"])
-    query = p.parse_qs(url_data.query)
-    video_id = query["v"][0]
+    def __str__(self):
+        return f"""
+        Video:
+            Title: {self.title}
+            Description: {self.description}
+            Upload Date: {self.upload_date}
+            Thumbnail: {self.thumbnail}
+            YouTube ID: {self.youtube_id}
+            YouTube URL: {self.youtube_url}
+            Channel ID: {self.channel_id}
+            Channel: {self.channel}
+            Save Name: {self.save_name}
+            Save Directory: {self.save_directory}
+        """
 
-    # 构建 API 请求的 URL
-    base_video_url = 'https://www.googleapis.com/youtube/v3/videos?'
-    first_url = base_video_url+'key={}&id={}&part=snippet,contentDetails,statistics'.format(youtube_data_api_key, video_id)
+    def get_info(self, youtube_url):
+        ydl_opts = {}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+            info_dict = ydl.sanitize_info(info)
 
-    # 发送请求并获取响应
-    inp = requests.get(first_url)
-    resp = json.loads(inp.text)
-    
-    full_video_info = resp['items'][0]
+            self.title = info_dict['title']
+            self.description = info_dict['description']
+            self.upload_date = info_dict['upload_date']
+            self.thumbnail = info_dict['thumbnail']
+            self.youtube_id = info_dict['id']
+            self.youtube_url = info_dict['webpage_url']
+            self.channel_id = info_dict['channel_id']
+            self.channel = info_dict['channel']
+            self.save_name = f"{self.youtube_id}"
+            self.save_directory = f"./{self.youtube_id}/"
 
-    # 提取所需的字段
-    video_info["video_id"] = full_video_info["id"]
-    video_info["channel_id"] = full_video_info["snippet"]["channelId"]
-    video_info["title"] = full_video_info["snippet"]["title"]
-    upload_time_utc = datetime.strptime(full_video_info['snippet']['publishedAt'], "%Y-%m-%dT%H:%M:%SZ")
-    upload_time_east8 = (upload_time_utc + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-    video_info["upload_time"] = upload_time_east8
+    def create_download_directory(self):
+        os.makedirs(self.save_directory, exist_ok=True)
 
-    return video_info
-
-def save_video_info() -> None:
-    conn = sqlite3.connect('dnu.db')
-    cur = conn.cursor()
-
-    # 在数据库中查询该视频是否已存在
-    cur.execute("SELECT video_id FROM videos WHERE video_id = ?", (video_info["video_id"],))
-    result = cur.fetchone()
-
-    # 如果视频在数据库中不存在，则插入新纪录
-    if result is None:
-        cur.execute("""
-            INSERT INTO videos (video_id, channel_id, title, upload_time, added_time) 
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            video_info["video_id"], 
-            video_info["channel_id"], 
-            video_info["title"], 
-            video_info["upload_time"], 
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ))
-
-    conn.commit()
-    conn.close()
-
-def download_video():
-    # 设置下载音频的选项
-    audio_ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-        }],
-        'outtmpl': './resource/%(channel)s/%(id)s',
-        'socket_timeout': 180,
-        'retries': 10
-    }
-    # 设置下载视频的选项
-    video_ydl_opts = {
-        'format' : 'bv[height<=1080][ext=mp4]+ba[ext=m4a]',
-        'outtmpl': './resource/%(channel)s/%(id)s.mp4',
-        'socket_timeout': 180,
-        'retries': 10
-    }
-
-    with yt_dlp.YoutubeDL(audio_ydl_opts) as ydl:
-        # 下载音频文件
-        ydl.download([video_info["youtube_url"]])
-
-    with yt_dlp.YoutubeDL(video_ydl_opts) as ydl:
-        # 获取视频信息
-        extract_info = ydl.extract_info(video_info["youtube_url"], download=False)
-        # 更新视频信息并存储下载的文件路径
-        video_info['description'] = extract_info['description']
-        video_info['video_path'] = f"./resource/{extract_info['channel']}/{extract_info['id']}.mp4"
-        video_info['audio_path'] = f"./resource/{extract_info['channel']}/{extract_info['id']}.mp3"
-        video_info['thumbnail_path'] = f"./resource/{extract_info['channel']}/{extract_info['id']}.png"
-        # 下载视频文件
-        ydl.download([video_info["youtube_url"]])
+    def download_thumbnail(self):
         # 下载缩略图，并将其转换为 RGB 格式
-        imgData = requests.get(extract_info['thumbnail']).content
-        with open(f"./resource/{extract_info['channel']}/{extract_info['id']}.webp", "wb") as handler:
+        imgData = requests.get(self.thumbnail).content
+        file_name = f"{self.save_directory}{self.save_name}" # 命名规则
+        with open(f"{file_name}.webp", "wb") as handler:
             handler.write(imgData)
-        im = Image.open(f"./resource/{extract_info['channel']}/{extract_info['id']}.webp").convert("RGB")
-        im.save(f"./resource/{extract_info['channel']}/{extract_info['id']}.png")
+        im = Image.open(f"{file_name}.webp").convert("RGB")
+        im.save(f"{file_name}.png")
+        if os.path.exists(f"{file_name}.webp"):
+            os.remove(f"{file_name}.webp")
 
-def upload_video_to_bilibili():
-    # 使用 biliup 工具上传视频到 B 站
-    return_code = subprocess.run([
-    './biliup', 'upload', f"{video_info['video_path']}",
-    '--copyright', '2',
-    '--cover', f"{video_info['thumbnail_path']}",
-    '--desc', f"{video_info['description'][:99]}",
-    '--source', f'{video_info["youtube_url"][:79]}',
-    '--tag', 'youtube',
-    '--title', f'{video_info["title"][:79]}',
-    ])
-    print("return code:", return_code)
+    def download_audio(self):
+        ydl_opts = {
+            'format': 'm4a/bestaudio/best',
+            'outtmpl': f'{self.save_directory}{self.save_name}.mp3',
+            # ℹ️ See help(yt_dlp.postprocessor) for a list of available Postprocessors and their arguments
+            'postprocessors': [{  # Extract audio using ffmpeg
+                'key': 'FFmpegExtractAudio',
+            }]
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            error_code = ydl.download(self.youtube_url)
 
-if __name__ == '__main__':
-    video_info["youtube_url"] = sys.argv[1]
-    get_video_info()
-    download_video()
-    save_video_info()
-    upload_video_to_bilibili()
+    def download_video(self):
+        ydl_opts = {
+            'format' : 'bv[height<=1080][ext=mp4]+ba[ext=m4a]',
+            'outtmpl': f'{self.save_directory}{self.save_name}.mp4',
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            error_code = ydl.download(self.youtube_url)
+
+
+db.connect()
+Video.create_table(fail_silently=True)
+
+
+youtube_url = input("请输入Youtube视频地址：")  # https://www.youtube.com/watch?v=BaW_jenozKc
+
+video = Video()
+video.get_info(youtube_url)
+video.create_download_directory()
+video.download_thumbnail()
+video.download_audio()
+video.download_video()
+video.save()
