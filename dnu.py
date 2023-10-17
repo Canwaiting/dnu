@@ -1,5 +1,5 @@
 from PIL import Image
-from peewee import Model, CharField,IntegerField, SqliteDatabase, DateTimeField
+from peewee import Model, CharField,IntegerField,BooleanField, SqliteDatabase, DateTimeField
 import datetime
 import json
 import requests
@@ -22,6 +22,13 @@ class Video(BaseModel):
     channel = CharField(null=True)
     save_name = CharField(null=True)
     save_directory = CharField(null=True)
+    is_have_subtitle_en = BooleanField(null=True)
+    is_have_subtitle_zh = BooleanField(null=True)
+    is_upload_net_disk = BooleanField(null=True)
+    is_editing_video = BooleanField(default=False)
+    is_upload_bilibili = BooleanField(default=False)
+    upload_bilibili_time = CharField(null=True)
+    download_time = CharField(null=True)
 
     def __str__(self):
         return f"""
@@ -89,6 +96,9 @@ class Video(BaseModel):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             error_code = ydl.download(self.youtube_url)
 
+        current_datetime = datetime.now()
+        formatted_string = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        self.download_time = formatted_string
 
 db.connect()
 Video.create_table(fail_silently=True)
