@@ -11,6 +11,7 @@ dependencies = [
     "pillow>=10.0.1",
     "pyinstaller>=4.5.1",
     "requests>=2.31.0",
+    "scrapetube>=2.5.1",
 ]
 requires-python = ">=3.9"
 readme = "README.md"

@@ -22,6 +22,7 @@ class Video(BaseModel):
     channel = CharField(null=True)
     save_name = CharField(null=True)
     save_directory = CharField(null=True)
+    is_have_info = BooleanField(null=False)
     is_have_subtitle_en = BooleanField(null=True)
     is_have_subtitle_zh = BooleanField(null=True)
     is_upload_net_disk = BooleanField(null=True)
@@ -96,7 +97,7 @@ class Video(BaseModel):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             error_code = ydl.download(self.youtube_url)
 
-        current_datetime = datetime.now()
+        current_datetime = datetime.datetime.now()
         formatted_string = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
         self.download_time = formatted_string
 
