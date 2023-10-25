@@ -28,24 +28,24 @@ class Video(Model):
     download_time = CharField(null=True)
     create_time = CharField(null=True)
 
-    class Meta:
-        database = None
-        table_name = ''
 
-    def __str__(self):
-        return f"""
-        Video:
-            Title: {self.title}
-            Description: {self.description}
-            Upload Date: {self.upload_date}
-            Thumbnail: {self.thumbnail}
-            YouTube ID: {self.youtube_id}
-            YouTube URL: {self.youtube_url}
-            Channel ID: {self.channel_id}
-            Channel: {self.channel}
-            Save Name: {self.save_name}
-            Save Directory: {self.save_directory}
-        """
+    channel_table_name = ""
+    download_type = ""  # audio / video / thumbnail
+    video_status_info = {
+        "status" : "",
+        "percent" : "",
+        "speed" : "",
+        "eta" : ""
+    }
+    audio_status_info = {
+        "status" : "",
+        "percent" : "",
+        "speed" : "",
+        "eta" : ""
+    }
+    thumbnail_status_info = {
+        "status" : ""
+    }
 
     def get_info(self, youtube_url):
         ydl_opts = {}
@@ -87,7 +87,6 @@ class Video(Model):
         ydl_opts = {
             'format': 'm4a/bestaudio/best',
             'outtmpl': f'{self.save_directory}{self.save_name}.mp3',
-            # ℹ️ See help(yt_dlp.postprocessor) for a list of available Postprocessors and their arguments
             'postprocessors': [{  # Extract audio using ffmpeg
                 'key': 'FFmpegExtractAudio',
             }]
@@ -107,14 +106,23 @@ class Video(Model):
         formatted_string = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
         self.download_time = formatted_string
 
+    def get_channel_table_name(self):
+        SubscribeChannel._meta.database = self._meta.database
+        result = SubscribeChannel.get_or_none(SubscribeChannel.channel_id == self.channel_id)
+        if result is not None:
+            self.channel_table_name = result.table_name
+        return self.channel_table_name
+
+    def save_in_table(self, table_name):
+        original_table_name = self._meta.table_name
+        self._meta.set_table_name(table_name)
+        self._meta.database.create_tables([self], safe=True)  # safe=True 使得不会重复创建
+        self.save()
+        self._meta.set_table_name(original_table_name)
+
 class SubscribeChannel(Model):
     channel_name = CharField(null=True)
     channel_id = CharField(null=True)
     table_name = CharField(null=True)
     initial_time = CharField(null=True)
     last_update_time = CharField(null=True)
-
-    class Meta:
-        database = None
-        table_name = 'subscribechannel'
-
