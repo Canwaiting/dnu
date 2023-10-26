@@ -12,6 +12,9 @@ def download(youtube_url):
     video.download_audio()
     video.download_video()
 
+    my_save(video)
+
+def my_save(video):
     print("")
     print("正在保存到历史下载记录...")
     video.save_in_table('history')
@@ -25,12 +28,13 @@ def download(youtube_url):
         if result is not None:
             print("")
             print("存在记录，正在更新相应字段...")
+            video.id = result.id
             video.create_time = result.create_time
             video.is_ignored = False
         else:
             print("")
             print("无记录，正在插入记录...")
-        video.save_in_table(channel_table_name)
+        video.save_in_table(channel_table_name)  # save逻辑是根据自动生成的id的
 
 def search_video_in_table(video_url, table_name):
     original_table_name = Video._meta.table_name
