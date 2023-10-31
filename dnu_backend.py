@@ -1,49 +1,11 @@
-import threading
-import time
-import os
-from fastapi import FastAPI
-import uvicorn
-import subprocess
 import socket
-import signal
-from pydantic import BaseModel
-import dnu
-
-# 定义Pydantic模型
-class DownloadRequest(BaseModel):
-    youtube_url: str
-
+import subprocess
+import time
+import uvicorn
+import asyncio
+import sys
+from fastapi import FastAPI
 app = FastAPI()
-should_exit = False
-server_pid = -1
-
-@app.post("/download")
-def download(request_data: DownloadRequest):
-    youtube_url = request_data.youtube_url
-    dnu.download(youtube_url)
-    return {"message": f"成功下载 {youtube_url}"}
-
-@app.get("/test")
-def test():
-    return {"message": "成功启动DNU服务器"}
-
-@app.get("/server/shutdown")
-def shutdown():
-    global should_exit
-    global server_pid
-    should_exit = True
-    server_pid = os.getpid()
-    return {"message": "成功关闭DNU服务器"}
-
-
-def is_port_in_use(port: int, host='127.0.0.1') -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind((host, port))
-            return False  # 端口未被占用
-        except OSError:
-            return True  # 端口被占用
-
 
 def kill_process_on_port(port):
     try:
@@ -58,13 +20,32 @@ def kill_process_on_port(port):
             return True
     except Exception as e:
         print(f"Error while killing process on port {port}: {e}")
-        return False
+
+def is_port_in_use(port: int, host='127.0.0.1') -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+            return False  # 端口未被占用
+        except OSError:
+            return True  # 端口被占用
 
 
-def run_uvicorn():
-    port = 8000
-    max_retries = 5
-    retries = 0
+@app.get("/")
+def greet():
+    return {"message": "Hello, world"}
+
+@app.get("/server/shutdown")
+async def shutdown():
+    global server
+    global loop
+    loop.stop()
+    await server.shutdown()
+
+port = 8000
+max_retries = 5
+retries = 0
+
+if __name__ == "__main__":
 
     while retries < max_retries:
         if is_port_in_use(port):
@@ -76,24 +57,24 @@ def run_uvicorn():
                 print(f"成功杀死端口号 {port} 的进程")
         else:
             print(f"端口 {port} 可用, 正在启动服务")
-            uvicorn.run(app, host="127.0.0.1", port=port)
+            break
 
         if retries == max_retries:
             print("已经超过最大重试次数,服务已停止")
 
-# uvicorn main:app --reload
-if __name__ == "__main__":
-    t = threading.Thread(target=run_uvicorn)
-    t.start()
+    # 启动服务器
+    print("开始启动服务器...")
+    config = uvicorn.Config(app=app, host="127.0.0.1", port=8000)
+    server = uvicorn.Server(config=config)
+    loop = None
 
-    while True:
-        if should_exit:
-            time.sleep(2)
-            print("开始关闭服务进程")
-            os.kill(server_pid, signal.SIGTERM)
-            t.join()
-            print("5秒后开始关闭主线程")
-            time.sleep(5)
-            os.kill(os.getpid(), signal.SIGTERM)
-
-
+    try:
+        config.setup_event_loop()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(server.serve())
+    except:
+        print("程序已经关闭")
+        sys.exit()
+        # 正常情况下不会走到这，但是防止应用程序无法关闭，所以多一重保障
+        time.sleep(2)
+        sys.exit()

@@ -14,6 +14,7 @@ dependencies = [
     "scrapetube>=2.5.1",
     "fastapi>=0.104.0",
     "uvicorn>=0.23.2",
+    "psutil>=5.9.6",
 ]
 requires-python = ">=3.9"
 readme = "README.md"
