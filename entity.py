@@ -1,10 +1,31 @@
+import logging
+import shutil
 import os
 from PIL import Image
 import yt_dlp
+import re
 import datetime
 import requests
 from peewee import *
+import scrapetube
+from dnu import *
+from dnu import download
 
+
+class NullLogger:
+    def debug(self, msg):
+        pass
+
+    def warning(self, msg):
+        pass
+    def error(self, msg):
+        pass
+
+ydl_opts = {
+    'quiet': True,
+    'logger': NullLogger(),
+    'noprogress': True
+}
 
 class Video(Model):
     title = CharField(null=True)
@@ -48,7 +69,9 @@ class Video(Model):
     }
 
     def get_info(self, youtube_url):
-        ydl_opts = {}
+        get_info_ydl_opts = ydl_opts.copy()
+        get_info_ydl_opts.update({})
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
             info_dict = ydl.sanitize_info(info)
@@ -68,6 +91,7 @@ class Video(Model):
             current_datetime = datetime.datetime.now()
             formatted_string = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
             self.create_time = formatted_string
+            my_logger.info(f"成功拉取视频信息，标题：{self.title}，链接：{self.youtube_url}")
 
     def create_download_directory(self):
         os.makedirs(self.save_directory, exist_ok=True)
@@ -113,6 +137,12 @@ class Video(Model):
             self.channel_table_name = result.table_name
         return self.channel_table_name
 
+    def update_in_table(self, table_name):
+        original_table_name = self._meta.table_name
+        self._meta.set_table_name(table_name)
+        self.save()
+        self._meta.set_table_name(original_table_name)
+
     def save_in_table(self, table_name):
         original_table_name = self._meta.table_name
         self._meta.set_table_name(table_name)
@@ -126,3 +156,146 @@ class SubscribeChannel(Model):
     table_name = CharField(null=True)
     initial_time = CharField(null=True)
     last_update_time = CharField(null=True)
+
+    def get_update_videos_url(self,channel_name, table_name):
+        my_logger.info(f"正在拉取最新，频道：{channel_name}")
+        my_logger.info(f"正在拉取最新，频道表名：{table_name}")
+        videos_url = []
+        result = scrapetube.get_channel(channel_name)  # videos[0] 为最新发布的， videos[last] 为最久之前发布的
+        for video in result:
+            youtube_url = "https://www.youtube.com/watch?v=" + str(video['videoId'])
+            if VideoManager().is_video_already_in_db(youtube_url, table_name) is False:
+                videos_url.append(youtube_url)
+            else:
+                break
+
+        return videos_url
+
+class SingletonMeta(type):
+    """简单实现懒汉单例模式"""
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(SingletonMeta, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+class DatabaseManager(metaclass=SingletonMeta):
+    def __init__(self, db_path='dnu.db'):
+        self.db = SqliteDatabase(db_path)
+        self.db.connect()
+
+        # 创建默认表（下载历史-history，订阅频道-subscribechannel）
+        original_table_name = Video._meta.table_name
+        Video._meta.set_database(self.db)
+        Video._meta.set_table_name('history')
+        self.db.create_tables([Video], safe=True)
+        Video._meta.set_table_name(original_table_name)
+
+        SubscribeChannel._meta.set_database(self.db)
+        self.db.create_tables([SubscribeChannel], safe=True)
+
+    def close(self):
+        self.db.close()
+
+
+class Logger(metaclass=SingletonMeta):
+    def __init__(self, name=__name__, level=logging.DEBUG):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(level)
+
+        # 创建一个handler，用于输出到控制台
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+
+        # 定义handler的输出格式
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s','%Y-%m-%d %H:%M:%S')
+        ch.setFormatter(formatter)
+
+        # 给logger添加handler
+        self.logger.addHandler(ch)
+
+    def get_logger(self):
+        return self.logger
+
+my_logger = Logger(__name__).get_logger()
+
+class DNUHelper():
+    def generate_youtube_url_list_to_txt(self,channel_table_name,youtube_url_list):
+        current_datetime = datetime.datetime.now()
+        formatted_string = current_datetime.strftime("%Y%m%d")
+        file_name = f"./{formatted_string}-{channel_table_name}.txt"
+        with open(f"{file_name}", "w") as file:
+            file.write("\n".join(youtube_url_list))
+        my_logger.info(f"正在生成本次更新的记录到 {file_name} 文件中")
+
+    def copy_mp3_to_a_folder(self,youtube_url_list, folder_path):
+        my_logger.info("正在拷贝.mp3到对应的文件夹中");
+        if not os.path.exists(folder_path):
+            os.mkdir(folder_path)
+        for youtube_url in youtube_url_list:
+            youtube_id = self.get_youtube_id_from_url(youtube_url)
+            mp3_name = f"{youtube_id}.mp3"
+            mp3_path = f"./{youtube_id}/{mp3_name}"
+            new_mp3_path = f"{folder_path}/{mp3_name}"
+            shutil.copy(mp3_path, new_mp3_path)  # source, destination
+
+    def get_youtube_id_from_url(self,youtube_url):
+        youtube_regex = (
+            r'(https?://)?(www\.)?'
+            '(youtube|youtu|youtube-nocookie)\.(com|be)/'
+            '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})'
+        )
+
+        match = re.match(youtube_regex, youtube_url)
+        if not match:
+            return None
+
+        return match.group(6)
+
+
+    def generate_whisper_script(self,youtube_url_list, folder_path):
+        script = ""
+        script_srt = "mkdir -p srt"
+        for youtube_url in youtube_url_list:
+            youtube_id = self.get_youtube_id_from_url(youtube_url)
+            mp3_name = f"{youtube_id}.mp3"
+
+            script += f"whisper --model large-v2 {folder_path}/{mp3_name}"
+            script += "\n"
+
+
+            script_srt += "\n"
+            script_srt += f"cp {folder_path}/{mp3_name} {folder_path}/srt/"
+
+
+
+        file_name = f"{folder_path}-whisper.sh"
+        with open(f"{file_name}", "w") as file:
+            file.write(script)
+
+        srt_file_name = f"{folder_path}-srt.sh"
+        with open(f"{srt_file_name}", "w") as file:
+            file.write(script_srt)
+
+class VideoManager(metaclass=SingletonMeta):
+    def is_video_already_in_db(self, youtube_url, table_name):
+        Video._meta.table_name = table_name
+        result = Video.get_or_none(Video.youtube_url == youtube_url)
+        if result is not None:
+            return True
+        else:
+            return False
+
+    def load_videos_info_to_db(self,videos_youtube_url_list, table_name):
+        i = 0
+        for youtube_url in videos_youtube_url_list:  # videos[0] 为最新发布的， videos[last] 为最久之前发布的
+            i = i + 1
+            my_logger.info(f"正在获取视频的信息，进度：{i} / {len(videos_youtube_url_list)}")
+            original_table_name = Video._meta.table_name
+            subscribe_channel_video = Video()
+            subscribe_channel_video._meta.set_table_name(table_name)
+            subscribe_channel_video.get_info(youtube_url)
+            subscribe_channel_video.save()  # TODO 怎么有日志知道保存了哪一些？到哪里就没有保存了？检测到哪里停了？
+    def download_youtube_url_list(self,youtube_url_list):
+        for youtube_url in youtube_url_list:
+            download(youtube_url)

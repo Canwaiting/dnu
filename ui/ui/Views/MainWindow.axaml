@@ -3,18 +3,26 @@
         xmlns:vm="using:ui.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" Width="500" Height="170"
         x:Class="ui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="ui">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-
+    <Grid
+        RowDefinitions="Auto,Auto,Auto"
+        >
+        <StackPanel Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Orientation="Horizontal" Margin="0,50,0,0">
+            <TextBox Name="TextBoxYoutubeUrl" Width="300" Margin="40,0,0,0"></TextBox>
+            <Button Name="MyButton" Margin="30,0,0,0" Content="下载" Width="80" Click="Button_OnClick"/>
+        </StackPanel> 
+        <StackPanel Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top" Orientation="Horizontal" Margin="40,10,0,0"> 
+            <ProgressBar Name="MyProgressBar" Height="20" Minimum="0" Maximum="100" Value="0" Width="300" ShowProgressText="True"/> 
+            <Label Name="MyLabel" Content="未开始" Margin="30,0,0,0" FontWeight="Bold"></Label>
+        </StackPanel> 
+    </Grid>
 </Window>
