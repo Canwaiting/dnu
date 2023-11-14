@@ -8,9 +8,6 @@ import datetime
 import requests
 from peewee import *
 import scrapetube
-from dnu import *
-from dnu import download
-
 
 class NullLogger:
     def debug(self, msg):
@@ -150,6 +147,28 @@ class Video(Model):
         self.save()
         self._meta.set_table_name(original_table_name)
 
+    def my_save(self):
+        my_logger.info("")
+        my_logger.info("正在保存到历史下载记录...")
+        self.save_in_table('history')
+
+        channel_table_name = self.get_channel_table_name()
+        if channel_table_name != "":
+            my_logger.info("")
+            my_logger.info(f"发现已订阅频道：{self.channel}，正在同步更新记录到表：{channel_table_name}...")
+            my_logger.info("注意：若无视频记录，则会插入。否则，更新相应字段。")
+            result = VideoManager().search_video_in_table(self.youtube_url, channel_table_name)
+            if result is not None:
+                my_logger.info("")
+                my_logger.info("存在记录，正在更新相应字段...")
+                self.id = result.id
+                self.create_time = result.create_time
+                self.is_ignored = False
+            else:
+                my_logger.info("")
+                my_logger.info("无记录，正在插入记录...")
+            self.save_in_table(channel_table_name)  # save逻辑是根据自动生成的id的
+
 class SubscribeChannel(Model):
     channel_name = CharField(null=True)
     channel_id = CharField(null=True)
@@ -170,6 +189,26 @@ class SubscribeChannel(Model):
                 break
 
         return videos_url
+
+    def update_channel(self,channel_id,channel_table_name):
+        # 获取该频道的更新
+        youtube_url_list = SubscribeChannel().get_update_videos_url(channel_id, channel_table_name)
+        my_logger.info(f"频道表：{channel_table_name} 有 {len(youtube_url_list)} 条更新")
+
+        if len(youtube_url_list) > 0:
+            dnu_helper = DNUHelper()
+            video_manager = VideoManager()
+            video_manager.load_videos_info_to_db(youtube_url_list, channel_table_name)
+            dnu_helper.generate_youtube_url_list_to_txt(channel_table_name,youtube_url_list)
+            video_manager.download_youtube_url_list(youtube_url_list)
+            current_datetime = datetime.datetime.now()
+            formatted_string = current_datetime.strftime("%Y%m%d")
+            folder_path = f"./{formatted_string}-{channel_table_name}"
+            dnu_helper.copy_mp3_to_a_folder(youtube_url_list,folder_path)
+            dnu_helper.generate_whisper_script(youtube_url_list,folder_path)
+            my_logger.info(f"频道表：{channel_table_name} 同步更新完成")
+        else:
+            my_logger.info(f"频道表：{channel_table_name} 无需进行同步更新")
 
 class SingletonMeta(type):
     """简单实现懒汉单例模式"""
@@ -252,6 +291,20 @@ class DNUHelper():
 
         return match.group(6)
 
+    def get_channel_table_name(self,channel_name):
+        SubscribeChannel._meta.database = DatabaseManager().db
+        result = SubscribeChannel.get_or_none(SubscribeChannel.channel_name == channel_name)
+        if result is not None:
+            return result.table_name
+        return ""
+
+    def get_channel_id(self,channel_name):
+        SubscribeChannel._meta.database = DatabaseManager().db
+        result = SubscribeChannel.get_or_none(SubscribeChannel.channel_name == channel_name)
+        if result is not None:
+            return result.channel_id
+        return ""
+
 
     def generate_whisper_script(self,youtube_url_list, folder_path):
         script = ""
@@ -298,4 +351,67 @@ class VideoManager(metaclass=SingletonMeta):
             subscribe_channel_video.save()  # TODO 怎么有日志知道保存了哪一些？到哪里就没有保存了？检测到哪里停了？
     def download_youtube_url_list(self,youtube_url_list):
         for youtube_url in youtube_url_list:
-            download(youtube_url)
+            download_task_list = DownloadTaskList()
+            download_task = DownloadTask(youtube_url)
+            download_task_list.add(download_task)
+            download_task.run()
+
+    def search_video_in_table(self,video_url, table_name):
+        original_table_name = Video._meta.table_name
+        Video._meta.set_table_name(table_name)
+        result = Video.get_or_none(Video.youtube_url == video_url)
+        Video._meta.set_table_name(original_table_name)
+        return result
+
+class DownloadTaskList(metaclass=SingletonMeta):
+    def __init__(self,initial_data=None):
+        self._data = initial_data if initial_data is not None else []
+
+    def add(self,download_task):
+        self._data.append(download_task)
+
+    def delete(self,download_task_id):
+        for download_task in self._data:
+            if download_task.download_task_id == download_task_id:
+                self._data.remove(download_task)
+
+    def get(self, download_task_id):
+        for download_task in self._data:
+            if download_task.download_task_id == download_task_id:
+                return download_task
+        return None
+
+
+
+class DownloadTask:
+    def __init__(self,youtube_url):
+        self.youtube_url = youtube_url
+        self.download_task_id = DNUHelper().get_youtube_id_from_url(youtube_url)
+        self.status = ""
+        self.percent = 0
+        self.speed = ""
+        self.eta = ""
+
+    def run(self):
+        video = Video()
+        video._meta.database = DatabaseManager().db
+        self.percent = 10
+
+        video.get_info(self.youtube_url)
+        self.percent = 30
+
+        video.create_download_directory()
+        self.percent = 50
+
+        video.download_thumbnail()
+        self.percent = 60
+
+        video.download_audio()
+        self.percent = 70
+
+        video.download_video()
+        self.percent = 90
+
+        video.my_save()
+        self.percent = 100
+

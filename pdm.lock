@@ -6,7 +6,7 @@ groups = ["default"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:7973e3c11c207737e458adb43243a2e4f55e04d59cb54937edb54708de20afc9"
+content_hash = "sha256:86481eed7a02c38f765206ce056aea68530531ffdd50ca8009bc47456e07004d"
 
 [[package]]
 name = "altgraph"
@@ -268,7 +268,7 @@ files = [
 
 [[package]]
 name = "fastapi"
-version = "0.104.0"
+version = "0.104.1"
 requires_python = ">=3.8"
 summary = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
 dependencies = [
@@ -278,8 +278,8 @@ dependencies = [
     "typing-extensions>=4.8.0",
 ]
 files = [
-    {file = "fastapi-0.104.0-py3-none-any.whl", hash = "sha256:456482c1178fb7beb2814b88e1885bc49f9a81f079665016feffe3e1c6a7663e"},
-    {file = "fastapi-0.104.0.tar.gz", hash = "sha256:9c44de45693ae037b0c6914727a29c49a40668432b67c859a87851fc6a7b74c6"},
+    {file = "fastapi-0.104.1-py3-none-any.whl", hash = "sha256:752dc31160cdbd0436bb93bad51560b57e525cbb1d4bbf6f4904ceee75548241"},
+    {file = "fastapi-0.104.1.tar.gz", hash = "sha256:e5e4540a7c5e1dcfbbcf5b903c234feddcdcd881f191977a1c5dfd917487e7ae"},
 ]
 
 [[package]]
@@ -588,6 +588,16 @@ summary = "Community maintained hooks for PyInstaller"
 files = [
     {file = "pyinstaller-hooks-contrib-2023.9.tar.gz", hash = "sha256:76084b5988e3957a9df169d2a935d65500136967e710ddebf57263f1a909cd80"},
     {file = "pyinstaller_hooks_contrib-2023.9-py2.py3-none-any.whl", hash = "sha256:f34f4c6807210025c8073ebe665f422a3aa2ac5f4c7ebf4c2a26cc77bebf63b5"},
+]
+
+[[package]]
+name = "python-multipart"
+version = "0.0.6"
+requires_python = ">=3.7"
+summary = "A streaming multipart parser for Python"
+files = [
+    {file = "python_multipart-0.0.6-py3-none-any.whl", hash = "sha256:ee698bab5ef148b0a760751c261902cd096e57e10558e11aca17646b74ee1c18"},
+    {file = "python_multipart-0.0.6.tar.gz", hash = "sha256:e9925a80bb668529f1b67c7fdb0a5dacdd7cbfc6fb0bff3ea443fe22bdd62132"},
 ]
 
 [[package]]
