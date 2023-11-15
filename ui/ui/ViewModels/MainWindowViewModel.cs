@@ -24,6 +24,13 @@ public class MainWindowViewModel : ViewModelBase
         MaxTimeout = -1,
     };   
     
+    private string? _labelContent; 
+    public string? LabelContent
+    {
+        get => _labelContent;
+        set => this.RaiseAndSetIfChanged(ref _labelContent, value);
+    }
+    
     
     private string? _youtubeUrlText; 
     public string? YoutubeUrlText
@@ -38,6 +45,13 @@ public class MainWindowViewModel : ViewModelBase
     {
         get => _isBusy;
         set => this.RaiseAndSetIfChanged(ref _isBusy, value);
+    }
+    
+    private bool _isNotBusy;
+    public bool IsNotBusy
+    {
+        get => !_isBusy;
+        set => this.RaiseAndSetIfChanged(ref _isNotBusy, value);
     }
 
     public int _downloadPercent = 0;
@@ -58,52 +72,69 @@ public class MainWindowViewModel : ViewModelBase
 
     private async void DoDownload(string youtubeurltext)
     {
-        IsBusy = true; 
-        
-        var client = new RestClient(options);
-        var request = new RestRequest("/download", Method.Post);
-        request.AddHeader("Content-Type", "application/json");
-        request.AddHeader("Content-Type", "application/x-www-form-urlencoded");
-        request.AddParameter("youtube_url", youtubeurltext);
-        RestResponse response = client.Execute(request);
-        
-        if (response.StatusCode == HttpStatusCode.OK)
+        try
         {
-            ApiResponse responseObj = JsonConvert.DeserializeObject<ApiResponse>(response.Content);
-            if (responseObj.Code == 0)
-            {
-                // 启动作业并立即返回
-                Dispatcher.UIThread.Post(() => GetDonwloadProgress(youtubeurltext), 
-                    DispatcherPriority.Background); 
-            }
-        }
-    } 
-    
-    private async Task GetDonwloadProgress(string youtubeurltext)
-    {
-        bool is_running = true;
-        while (is_running)
-        { 
-            await Task.Delay(1000);
+            IsBusy = true; 
+        
             var client = new RestClient(options);
-            var request = new RestRequest($"/download/progress?youtube_url={youtubeurltext}", Method.Get); 
+            var request = new RestRequest("/download", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Content-Type", "application/x-www-form-urlencoded");
+            request.AddParameter("youtube_url", youtubeurltext);
             RestResponse response = client.Execute(request);
-
+        
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 ApiResponse responseObj = JsonConvert.DeserializeObject<ApiResponse>(response.Content);
                 if (responseObj.Code == 0)
                 {
-                    DownloadInfo downloadInfo = JsonConvert.DeserializeObject<DownloadInfo>(responseObj.Data.ToString());
-                    Console.WriteLine($"百分比：{downloadInfo.Percent}");
-                    DownloadPercent = downloadInfo.Percent;
-                    if (downloadInfo.Percent == 100)
-                    {
-                        is_running = false;
-                        IsBusy = false;
-                    } 
+                    // 启动作业并立即返回
+                    Dispatcher.UIThread.Post(() => GetDonwloadProgress(youtubeurltext), 
+                        DispatcherPriority.Background); 
                 }
             }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+    } 
+    
+    private async Task GetDonwloadProgress(string youtubeurltext)
+    {
+        try
+        {
+            bool is_running = true;
+            while (is_running)
+            { 
+                await Task.Delay(1000);
+                var client = new RestClient(options);
+                var request = new RestRequest($"/download/progress?youtube_url={youtubeurltext}", Method.Get); 
+                RestResponse response = client.Execute(request);
+
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    ApiResponse responseObj = JsonConvert.DeserializeObject<ApiResponse>(response.Content);
+                    if (responseObj.Code == 0)
+                    {
+                        DownloadInfo downloadInfo = JsonConvert.DeserializeObject<DownloadInfo>(responseObj.Data.ToString());
+                        Console.WriteLine($"百分比：{downloadInfo.Percent}");
+                        DownloadPercent = downloadInfo.Percent;
+                        LabelContent = downloadInfo.StatusMessage;
+                        if (downloadInfo.Percent == 100)
+                        {
+                            is_running = false;
+                            IsBusy = false;
+                        } 
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
         }
     }
 

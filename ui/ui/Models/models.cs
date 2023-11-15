@@ -28,6 +28,9 @@ public class DownloadInfo
 
     [JsonProperty("percent")]
     public int Percent{ get; set; }
+    
+    [JsonProperty("status_message")]
+    public string StatusMessage{ get; set; }
 }
 
 

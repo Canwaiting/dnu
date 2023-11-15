@@ -33,7 +33,8 @@ class MyRequest(BaseModel):
 
 
 class DownloadInfo(BaseModel):
-    status: str = ""  # "", Info, Thumbnail, Audio, Video, Done
+    status: str = ""  # Info, Thumbnail, Audio, Video, Done
+    status_message: str = ""
     percent: int = 0
 
 
@@ -57,42 +58,36 @@ def change_progress(youtube_id, progress):
 
 
 def download(youtube_url):
-    # youtube_id = DNUHelper().get_youtube_id_from_url(youtube_url)
     global download_tasks_dict
 
     video = Video()
     video._meta.database = db
-    download_tasks_dict[youtube_url].status = ""
-    download_tasks_dict[youtube_url].percent= 10
 
-    video.get_info(youtube_url)
     download_tasks_dict[youtube_url].status = "Info"
-    download_tasks_dict[youtube_url].percent= 30
-    # change_progress(youtube_id, 30)
+    download_tasks_dict[youtube_url].status_message = "开始获取相关信息..."
+    download_tasks_dict[youtube_url].percent= 10
+    video.get_info(youtube_url)
 
-    video.create_download_directory()
-    download_tasks_dict[youtube_url].percent= 50
-    # change_progress(youtube_id, 50)
-
-    video.download_thumbnail()
     download_tasks_dict[youtube_url].status = "Thumbnail"
-    download_tasks_dict[youtube_url].percent= 60
-    # change_progress(youtube_id, 60)
+    download_tasks_dict[youtube_url].status_message = "开始下载封面..."
+    download_tasks_dict[youtube_url].percent= 30
+    video.create_download_directory()
+    video.download_thumbnail()
 
-    video.download_audio()
     download_tasks_dict[youtube_url].status = "Audio"
-    download_tasks_dict[youtube_url].percent= 70
-    # change_progress(youtube_id, 70)
+    download_tasks_dict[youtube_url].status_message = "开始下载音频..."
+    download_tasks_dict[youtube_url].percent= 60
+    video.download_audio()
 
-    video.download_video()
     download_tasks_dict[youtube_url].status = "Video"
-    download_tasks_dict[youtube_url].percent= 90
-    # change_progress(youtube_id, 90)
+    download_tasks_dict[youtube_url].status_message = "开始下载视频..."
+    download_tasks_dict[youtube_url].percent= 80
+    video.download_video()
 
-    my_save(video)
     download_tasks_dict[youtube_url].status = "Done"
+    download_tasks_dict[youtube_url].status_message = "下载完成"
     download_tasks_dict[youtube_url].percent= 100
-    # change_progress(youtube_id, 100)
+    my_save(video)
 
 
 def find_and_kill_process_by_port(port):
@@ -268,7 +263,7 @@ def download_all(background_tasks: BackgroundTasks,youtube_url : str = Form(...)
 def get_download_progress(youtube_url:str):
     response_data = CommonResponse(
         code=0,
-        data=download_tasks_dict[youtube_url].dict(),
+        data=download_tasks_dict[youtube_url].model_dump(),
         message="查询成功",
     )
     return JSONResponse(content=response_data.model_dump())
