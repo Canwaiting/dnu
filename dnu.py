@@ -50,6 +50,31 @@ my_logger = Logger(__name__).get_logger()
 info_list = []
 download_tasks_dict = {}
 
+# 自定义日志配置
+log_config = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "fmt": "%(levelprefix)s %(message)s",
+            "use_colors": None,
+        },
+    },
+    "handlers": {
+        "default": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+        },
+    },
+    "loggers": {
+        "uvicorn": {"handlers": ["default"], "level": "WARNING"},
+        "uvicorn.error": {"level": "WARNING"},
+        "uvicorn.access": {"handlers": ["default"], "level": "WARNING"},
+    },
+}
+
 
 def change_progress(youtube_id, progress):
     for info in info_list:
@@ -171,19 +196,109 @@ def greet():
     return {"message": "Hello, world"}
 
 
-@app.get("/subscribechannels")
-def get_subscribe_channel_list():
+
+def get_channel_all_videos(channel_id):
+    videos = list(scrapetube.get_channel(channel_id))
+    return videos
+
+def record_subscribe_channel(dict_info,table_name):
     subscribe_channel = SubscribeChannel()
     subscribe_channel._meta.database = db
-    subscribe_channel_list = list(subscribe_channel.select())
-    data_list = []
-    for channel in subscribe_channel_list:
-        data_list.append(channel.__data__)
-    my_dict = {"len":len(data_list), "subscribechannels":data_list}
-    myResponse = MyResponse(code=HTTPStatus.OK,
-                            message="",
-                            data=my_dict)
-    return myResponse
+    subscribe_channel.create_table(fail_silently=True)
+
+    current_datetime = datetime.datetime.now()
+    formatted_string = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
+    result = subscribe_channel.get_or_none(subscribe_channel.channel_id == dict_info['channel_id'])
+    if result is not None:
+        result.last_update_time = formatted_string
+        result.save()
+        return
+
+    subscribe_channel = SubscribeChannel()
+    subscribe_channel._meta.database = db
+    subscribe_channel.channel_name = dict_info['channel_name']
+    subscribe_channel.channel_id = dict_info['channel_id']
+    subscribe_channel.table_name = table_name
+    subscribe_channel.initial_time = formatted_string
+    subscribe_channel.last_update_time = formatted_string
+    subscribe_channel.save()
+
+def get_table_name(channel_name):
+    # 只保留英文，且转换成小写
+    result = []
+    for char in channel_name:
+        if char.isalpha():
+            result.append(char.lower())
+    return ''.join(result)
+
+def parse_info(youtube_url):
+    ydl_opts = {}
+    dict_info = {}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(youtube_url, download=False)
+        info_dict = ydl.sanitize_info(info)
+        dict_info['channel_name'] = info_dict['channel']
+        dict_info['channel_id'] = info_dict['channel_id']
+    return dict_info
+
+def is_video_already_in_db(youtube_url,table_name):
+    Video._meta.database = db
+    Video._meta.table_name = table_name
+    result = Video.get_or_none(Video.youtube_url == youtube_url)
+    if result is not None:
+        return True
+    else:
+        return False
+
+def func(youtube_url):
+    dict_info = parse_info(youtube_url)
+    print(f"解析出 channel_name 为：{dict_info['channel_name']}")
+    print(f"解析出 channel_id 为：{dict_info['channel_id']}")
+    table_name = get_table_name(dict_info['channel_name'])
+    print("正在记录到订阅的频道列表中...")
+    record_subscribe_channel(dict_info, table_name)
+    print(f"正在为频道：{dict_info['channel_name']} 创建表，表名：{table_name}")
+    channel_video = Video()
+    channel_video ._meta.database = db
+    channel_video ._meta.table_name = table_name
+    db.create_tables([channel_video], safe=True)  # safe=True 使得不会重复创建
+    video_list = get_channel_all_videos(dict_info['channel_id'])
+    print(f"频道：{dict_info['channel_name']}，共有：{len(video_list)}条视频")
+    print("正在拉取该频道的所有视频信息到数据库，请稍候...")
+    for video in video_list:  # videos[0] 为最新发布的， videos[last] 为最久之前发布的
+        youtube_url = "https://www.youtube.com/watch?v=" + str(video['videoId'])
+        subscribe_channel_video = Video()
+        if is_video_already_in_db(youtube_url, table_name) == False:
+            subscribe_channel_video.get_info(youtube_url)
+            subscribe_channel_video.is_ignored = True
+            subscribe_channel_video.save()
+
+@app.post("/subscribechannels")
+def subscribe_channels(background_tasks: BackgroundTasks,youtube_url : str = Form(...)):
+    background_tasks.add_task(func,youtube_url=youtube_url)
+    response_data = CommonResponse(
+        code=0,
+        data={"youtube_url": youtube_url},
+        message="正在开始订阅对应的频道",
+    )
+    return JSONResponse(content=response_data.model_dump())
+
+
+
+# @app.post("/subscribechannels")
+# def get_subscribe_channel_list():
+#     subscribe_channel = SubscribeChannel()
+#     subscribe_channel._meta.database = db
+#     subscribe_channel_list = list(subscribe_channel.select())
+#     data_list = []
+#     for channel in subscribe_channel_list:
+#         data_list.append(channel.__data__)
+#     my_dict = {"len":len(data_list), "subscribechannels":data_list}
+#     myResponse = MyResponse(code=HTTPStatus.OK,
+#                             message="",
+#                             data=my_dict)
+#     return myResponse
 
 
 @app.post("/channel/update/videoinfo/{channel_name}")
@@ -208,13 +323,29 @@ def update_channel(channel_name: str):
     thread.start()
     return {"message": "正在开始更新频道"}
 
-
-@app.get("/check/update")
-def check_update():
+def update():
+    # 从数据库中获取订阅频道的列表
     subscribe_channel = SubscribeChannel()
     subscribe_channel._meta.database = db
     subscribe_channel_list = list(subscribe_channel.select())
 
+    process_channel_updates(subscribe_channel_list)
+    log_subscribed_channels(subscribe_channel_list)
+
+
+@app.post("/check/update")
+def check_update(background_tasks: BackgroundTasks):
+    background_tasks.add_task(update)
+    response_data = CommonResponse(
+        code=0,
+        data={},
+        message="开始同步频道",
+    )
+    return JSONResponse(content=response_data.model_dump())
+
+
+
+def log_subscribed_channels(subscribe_channel_list):
     my_logger.info("**********订阅的频道**********")
     i = 0
     for subscribe_channel in subscribe_channel_list:
@@ -223,6 +354,7 @@ def check_update():
             f"频道名字：{subscribe_channel.channel_name}，所在表：{subscribe_channel.table_name}，进度：{i}/{len(subscribe_channel_list)}")
     my_logger.info("****************************")
 
+def process_channel_updates(subscribe_channel_list):
     my_logger.info("正在同步更新...")
     for subscribe_channel in subscribe_channel_list:
         # 获取该频道的更新
@@ -243,9 +375,7 @@ def check_update():
             my_logger.info(f"频道：{subscribe_channel.channel_name} 同步更新完成")
         else:
             my_logger.info(f"频道：{subscribe_channel.channel_name} 无需进行同步更新")
-
     my_logger.info("完成所有频道的同步")
-    return {"message": "完成所有频道的同步"}
 
 @app.post("/download")
 def download_all(background_tasks: BackgroundTasks,youtube_url : str = Form(...)):
@@ -308,7 +438,7 @@ if __name__ == "__main__":
 
     # 启动服务器
     my_logger.info("开始启动服务器...")
-    config = uvicorn.Config(app=app, host="127.0.0.1", port=8000)
+    config = uvicorn.Config(app=app, host="127.0.0.1", port=8000,log_config=log_config)
     server = uvicorn.Server(config=config)
     loop = None
 
