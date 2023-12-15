@@ -1,3 +1,8 @@
+import json
+import traceback
+import concurrent
+import copy
+import uuid
 from enum import Enum
 
 from fastapi.responses import JSONResponse
@@ -284,65 +289,70 @@ def subscribe_channels(background_tasks: BackgroundTasks,youtube_url : str = For
     )
     return JSONResponse(content=response_data.model_dump())
 
+@app.post("/update/subscribedchannels")
+def post_update_subscribedchannels(background_tasks: BackgroundTasks):
+    """更新所订阅的频道"""
+    # 初始化任务，并添加到任务队列中
+    unique_id = uuid.uuid4()
+    unique_id_str = str(unique_id)
+    update_subscribed_channels = UpdateSubscribedChannels()
+    TaskDict.add(unique_id_str, update_subscribed_channels)
 
+    background_tasks.add_task(update_subscribedchannels_background,uuid=unique_id_str)
 
-# @app.post("/subscribechannels")
-# def get_subscribe_channel_list():
-#     subscribe_channel = SubscribeChannel()
-#     subscribe_channel._meta.database = db
-#     subscribe_channel_list = list(subscribe_channel.select())
-#     data_list = []
-#     for channel in subscribe_channel_list:
-#         data_list.append(channel.__data__)
-#     my_dict = {"len":len(data_list), "subscribechannels":data_list}
-#     myResponse = MyResponse(code=HTTPStatus.OK,
-#                             message="",
-#                             data=my_dict)
-#     return myResponse
-
-
-@app.post("/channel/update/videoinfo/{channel_name}")
-def update_channel(channel_name: str):
-    '''
-
-    :param channel_id:
-    :return: 数量，youtube_url
-    '''
-    subscribe_channel = SubscribeChannel.get_or_none(SubscribeChannel.channel_name == channel_name)
-    youtube_url_list = SubscribeChannel().get_update_videos_url(subscribe_channel.channel_id,
-                                                                subscribe_channel.table_name)
-    item = Item(value=f"{len(youtube_url_list)}", data=youtube_url_list)
-    return item
-
-
-@app.post("/channel/download/update/{channel_name}")
-def update_channel(channel_name: str):
-    channel_table_name = DNUHelper().get_channel_table_name(channel_name)
-    channel_id = DNUHelper().get_channel_id(channel_name)
-    thread = threading.Thread(target=SubscribeChannel().update_channel, args=(channel_id, channel_table_name,))
-    thread.start()
-    return {"message": "正在开始更新频道"}
-
-def update():
-    # 从数据库中获取订阅频道的列表
-    subscribe_channel = SubscribeChannel()
-    subscribe_channel._meta.database = db
-    subscribe_channel_list = list(subscribe_channel.select())
-
-    process_channel_updates(subscribe_channel_list)
-    log_subscribed_channels(subscribe_channel_list)
-
-
-@app.post("/check/update")
-def check_update(background_tasks: BackgroundTasks):
-    background_tasks.add_task(update)
     response_data = CommonResponse(
         code=0,
-        data={},
-        message="开始同步频道",
+        data={"uuid": unique_id_str},
+        message="",
     )
     return JSONResponse(content=response_data.model_dump())
 
+def update_subscribedchannels_background(uuid):
+    try:
+        update_subscribed_channels = TaskDict.get(uuid)
+        sc = SubscribeChannel()
+        sc._meta.database = db
+        sc_list = list(sc.select())
+        # 填充基本信息：频道信息、需要更新的视频链接
+        my_logger.info(f"开始更新频道，uuid：{uuid}")
+        for sc_db in sc_list:
+            update_sc = UpdateSubscribedChannel()
+            update_sc.convert(sc_db)
+            update_youtube_url_list = SubscribeChannel().get_update_videos_url(sc_db.channel_name,sc_db.channel_id,sc_db.table_name)
+            update_sc.update_count = len(update_youtube_url_list)
+            my_logger.info(f"频道：{update_sc.channel_name}，需更新数：{update_sc.update_count}")
+            for update_youtube_url in update_youtube_url_list:
+                video = Video()
+                video.youtube_url = update_youtube_url
+                update_sc.update_video_list.append(video)
+            update_subscribed_channels.update_subscribed_channel_list.append(update_sc)
+        # 开始获取信息、下载操作
+        my_logger.info("开始获取信息并下载...")
+        for update_sc in update_subscribed_channels.update_subscribed_channel_list:
+            my_logger.info(f"频道：{update_sc.channel_name},需要更新的视频数：{len(update_sc.update_video_list)}")
+            futures = [executor.submit(process_update, update_video) for update_video in update_sc.update_video_list]
+            concurrent.futures.wait(futures)
+    except Exception as e:
+        my_logger.error(f"异常：{e}，堆栈信息：\n{traceback.format_exc()}")
+
+def process_update(video : Video):
+    my_logger.info(f"视频链接：{video.youtube_url}")
+    video.get_info()
+    video.only_download_and_save()
+
+
+@app.get("/update/subscribedchannels")
+def get_update_subscribedchannels(uuid : str = Form(...)):
+    """获取更新的频道的进度"""
+    update_subscribed_channels = TaskDict.get(uuid)
+
+    # 直接返回字典
+    response_data = CommonResponse(
+        code=0,
+        data={"update_subscribed_channels":update_subscribed_channels }, # TODO 还不能直接返回，要进行序列化
+        message="",
+    )
+    return JSONResponse(content=response_data.model_dump())
 
 
 def log_subscribed_channels(subscribe_channel_list):
@@ -354,28 +364,27 @@ def log_subscribed_channels(subscribe_channel_list):
             f"频道名字：{subscribe_channel.channel_name}，所在表：{subscribe_channel.table_name}，进度：{i}/{len(subscribe_channel_list)}")
     my_logger.info("****************************")
 
-def process_channel_updates(subscribe_channel_list):
-    my_logger.info("正在同步更新...")
-    for subscribe_channel in subscribe_channel_list:
-        # 获取该频道的更新
-        youtube_url_list = SubscribeChannel().get_update_videos_url(subscribe_channel.channel_id,
-                                                                    subscribe_channel.table_name)
-        my_logger.info(f"频道：{subscribe_channel.channel_name} 有 {len(youtube_url_list)} 条更新")
-
-        if len(youtube_url_list) > 0:
-            video_manager.load_videos_info_to_db(youtube_url_list, subscribe_channel.table_name)
-            dnu_helper.generate_youtube_url_list_to_txt(subscribe_channel.table_name, youtube_url_list)
-            video_manager.download_youtube_url_list(
-                youtube_url_list)  # TODO 如果前面的拉取，或者是这个流程失败的话，后面就只能单个单个手动地去拉，而不是整体地去拉
-            current_datetime = datetime.datetime.now()
-            formatted_string = current_datetime.strftime("%Y%m%d")
-            folder_path = f"./{formatted_string}-{subscribe_channel.table_name}"
-            dnu_helper.copy_mp3_to_a_folder(youtube_url_list, folder_path)
-            dnu_helper.generate_whisper_script(youtube_url_list, folder_path)
-            my_logger.info(f"频道：{subscribe_channel.channel_name} 同步更新完成")
-        else:
-            my_logger.info(f"频道：{subscribe_channel.channel_name} 无需进行同步更新")
-    my_logger.info("完成所有频道的同步")
+# def process_channel_updates(subscribe_channel_list):
+#     my_logger.info("正在同步更新...")
+#     for subscribe_channel in subscribe_channel_list:
+#         # 获取该频道的更新
+#         youtube_url_list = SubscribeChannel().get_update_videos_url(subscribe_channel.channel_id,
+#                                                                     subscribe_channel.table_name)
+#         my_logger.info(f"频道：{subscribe_channel.channel_name} 有 {len(youtube_url_list)} 条更新")
+#
+#         if len(youtube_url_list) > 0:
+#             video_manager.load_videos_info_to_db(youtube_url_list, subscribe_channel.table_name)
+#             dnu_helper.generate_youtube_url_list_to_txt(subscribe_channel.table_name, youtube_url_list)
+#             video_manager.download_youtube_url_list(youtube_url_list)
+#             current_datetime = datetime.datetime.now()
+#             formatted_string = current_datetime.strftime("%Y%m%d")
+#             folder_path = f"./{formatted_string}-{subscribe_channel.table_name}"
+#             dnu_helper.copy_mp3_to_one_zip(youtube_url_list, folder_path)
+#             dnu_helper.generate_whisper_script(youtube_url_list, folder_path)
+#             my_logger.info(f"频道：{subscribe_channel.channel_name} 同步更新完成")
+#         else:
+#             my_logger.info(f"频道：{subscribe_channel.channel_name} 无需进行同步更新")
+#     my_logger.info("完成所有频道的同步")
 
 @app.post("/download")
 def download_all(background_tasks: BackgroundTasks,youtube_url : str = Form(...)):

@@ -1,3 +1,4 @@
+import zipfile
 import logging
 import shutil
 import os
@@ -65,10 +66,13 @@ class Video(Model):
         "status" : ""
     }
 
-    def get_info(self, youtube_url):
+    def get_info(self, youtube_url = None):
+        if youtube_url == None:
+            youtube_url = self.youtube_url
         get_info_ydl_opts = ydl_opts.copy()
         get_info_ydl_opts.update({})
 
+        my_logger.info(f"开始拉取视频信息，链接：{self.youtube_url}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
             info_dict = ydl.sanitize_info(info)
@@ -90,13 +94,23 @@ class Video(Model):
             self.create_time = formatted_string
             my_logger.info(f"成功拉取视频信息，标题：{self.title}，链接：{self.youtube_url}")
 
+    def only_download_and_save(self):
+        self._meta.database = DatabaseManager().db
+        self.create_download_directory()
+        self.download_thumbnail()
+        self.download_audio()
+        self.download_video()
+        self.my_save()
+
     def create_download_directory(self):
+        my_logger.info(f"创建目录：{self.save_directory}")
         os.makedirs(self.save_directory, exist_ok=True)
 
     def download_thumbnail(self):
         # 下载缩略图，并将其转换为 RGB 格式
-        imgData = requests.get(self.thumbnail).content
         file_name = f"{self.save_directory}{self.save_name}" # 命名规则
+        my_logger.info(f"正在下载壁纸，下载到：{file_name}.png")
+        imgData = requests.get(self.thumbnail).content
         with open(f"{file_name}.webp", "wb") as handler:
             handler.write(imgData)
         im = Image.open(f"{file_name}.webp").convert("RGB")
@@ -105,6 +119,7 @@ class Video(Model):
             os.remove(f"{file_name}.webp")
 
     def download_audio(self):
+        my_logger.info("正在下载音频...")
         ydl_opts = {
             'format': 'm4a/bestaudio/best',
             'outtmpl': f'{self.save_directory}{self.save_name}.mp3',
@@ -176,11 +191,10 @@ class SubscribeChannel(Model):
     initial_time = CharField(null=True)
     last_update_time = CharField(null=True)
 
-    def get_update_videos_url(self,channel_name, table_name):
-        my_logger.info(f"正在拉取最新，频道：{channel_name}")
-        my_logger.info(f"正在拉取最新，频道表名：{table_name}")
+    def get_update_videos_url(self,channel_name, channel_id, table_name):
+        my_logger.info(f"正在拉取最新，频道：{channel_name}，表名：{table_name}")
         videos_url = []
-        result = scrapetube.get_channel(channel_name)  # videos[0] 为最新发布的， videos[last] 为最久之前发布的
+        result = scrapetube.get_channel(channel_id)  # videos[0] 为最新发布的， videos[last] 为最久之前发布的
         for video in result:
             youtube_url = "https://www.youtube.com/watch?v=" + str(video['videoId'])
             if VideoManager().is_video_already_in_db(youtube_url, table_name) is False:
@@ -190,25 +204,25 @@ class SubscribeChannel(Model):
 
         return videos_url
 
-    def update_channel(self,channel_id,channel_table_name):
-        # 获取该频道的更新
-        youtube_url_list = SubscribeChannel().get_update_videos_url(channel_id, channel_table_name)
-        my_logger.info(f"频道表：{channel_table_name} 有 {len(youtube_url_list)} 条更新")
-
-        if len(youtube_url_list) > 0:
-            dnu_helper = DNUHelper()
-            video_manager = VideoManager()
-            video_manager.load_videos_info_to_db(youtube_url_list, channel_table_name)
-            dnu_helper.generate_youtube_url_list_to_txt(channel_table_name,youtube_url_list)
-            video_manager.download_youtube_url_list(youtube_url_list)
-            current_datetime = datetime.datetime.now()
-            formatted_string = current_datetime.strftime("%Y%m%d")
-            folder_path = f"./{formatted_string}-{channel_table_name}"
-            dnu_helper.copy_mp3_to_a_folder(youtube_url_list,folder_path)
-            dnu_helper.generate_whisper_script(youtube_url_list,folder_path)
-            my_logger.info(f"频道表：{channel_table_name} 同步更新完成")
-        else:
-            my_logger.info(f"频道表：{channel_table_name} 无需进行同步更新")
+    # def update_channel(self,channel_id,channel_table_name):
+    #     # 获取该频道的更新
+    #     youtube_url_list = SubscribeChannel().get_update_videos_url(channel_id, channel_table_name)
+    #     my_logger.info(f"频道表：{channel_table_name} 有 {len(youtube_url_list)} 条更新")
+    #
+    #     if len(youtube_url_list) > 0:
+    #         dnu_helper = DNUHelper()
+    #         video_manager = VideoManager()
+    #         video_manager.load_videos_info_to_db(youtube_url_list, channel_table_name)
+    #         dnu_helper.generate_youtube_url_list_to_txt(channel_table_name,youtube_url_list)
+    #         video_manager.download_youtube_url_list(youtube_url_list)
+    #         current_datetime = datetime.datetime.now()
+    #         formatted_string = current_datetime.strftime("%Y%m%d")
+    #         folder_path = f"./{formatted_string}-{channel_table_name}"
+    #         dnu_helper.copy_mp3_to_a_folder(youtube_url_list,folder_path)
+    #         dnu_helper.generate_whisper_script(youtube_url_list,folder_path)
+    #         my_logger.info(f"频道表：{channel_table_name} 同步更新完成")
+    #     else:
+    #         my_logger.info(f"频道表：{channel_table_name} 无需进行同步更新")
 
 class SingletonMeta(type):
     """简单实现懒汉单例模式"""
@@ -278,6 +292,18 @@ class DNUHelper():
             new_mp3_path = f"{folder_path}/{mp3_name}"
             shutil.copy(mp3_path, new_mp3_path)  # source, destination
 
+    def copy_mp3_to_one_zip(self,youtube_url_list, folder_path):
+        self.copy_mp3_to_a_folder(youtube_url_list, folder_path)
+        zip_path = f"{folder_path}.zip"
+        my_logger.info(f"正在压缩.mp3到{folder_path}")
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arc_name = os.path.relpath(file_path, folder_path)
+                    zipf.write(file_path, arc_name)
+
+
     def get_youtube_id_from_url(self,youtube_url):
         youtube_regex = (
             r'(https?://)?(www\.)?'
@@ -308,17 +334,17 @@ class DNUHelper():
 
     def generate_whisper_script(self,youtube_url_list, folder_path):
         script = ""
-        script_srt = "mkdir -p srt"
+        script_srt = ""
+        script_srt += f"mkdir -p {folder_path}/srt/"
         for youtube_url in youtube_url_list:
             youtube_id = self.get_youtube_id_from_url(youtube_url)
             mp3_name = f"{youtube_id}.mp3"
 
-            script += f"whisper --model large-v2 {folder_path}/{mp3_name}"
+            script += f"whisper --model large-v3 {folder_path}/{mp3_name}"
             script += "\n"
 
-
             script_srt += "\n"
-            script_srt += f"cp {folder_path}/{mp3_name} {folder_path}/srt/"
+            script_srt += f"cp {folder_path}/{youtube_id}.srt {folder_path}/srt/{youtube_id}.srt"
 
 
 
@@ -327,6 +353,7 @@ class DNUHelper():
             file.write(script)
 
         srt_file_name = f"{folder_path}-srt.sh"
+        script_srt += f"zip -q -r {folder_path}-zh-srt.zip {folder_path}/srt"
         with open(f"{srt_file_name}", "w") as file:
             file.write(script_srt)
 
@@ -350,8 +377,8 @@ class VideoManager(metaclass=SingletonMeta):
             subscribe_channel_video.get_info(youtube_url)
             subscribe_channel_video.save()  # TODO 怎么有日志知道保存了哪一些？到哪里就没有保存了？检测到哪里停了？
     def download_youtube_url_list(self,youtube_url_list):
+        download_task_list = DownloadTaskList()
         for youtube_url in youtube_url_list:
-            download_task_list = DownloadTaskList()
             download_task = DownloadTask(youtube_url)
             download_task_list.add(download_task)
             download_task.run()
@@ -415,3 +442,36 @@ class DownloadTask:
         video.my_save()
         self.percent = 100
 
+
+class UpdateSubscribedChannels:
+    update_subscribed_channel_list = []
+
+class UpdateSubscribedChannel:
+    def __init__(self, channel_name="", channel_id="", update_count=-1, update_video_list=None):
+        self.channel_name = channel_name
+        self.channel_id = channel_id
+        self.update_count = update_count
+        self.update_video_list = update_video_list if update_video_list is not None else []
+
+    def convert(self,subscribe_channel):
+        self.channel_name = subscribe_channel.channel_name
+        self.channel_id = subscribe_channel.channel_id
+
+class TaskDict(metaclass=SingletonMeta):
+    def __init__(self,initial_data=None):
+        self._data = initial_data if initial_data is not None else {}
+
+    @classmethod
+    def add(cls,uuid,task):
+        instance = cls()
+        instance._data[uuid] = task
+
+    @classmethod
+    def delete(cls,uuid):
+        instance = cls()
+        del instance ._data[uuid]
+
+    @classmethod
+    def get(cls,uuid):
+        instance = cls()
+        return instance._data[uuid]
