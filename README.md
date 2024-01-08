@@ -1,75 +1,102 @@
-# dnu
+# 🎞⬇ Cube YouTube Downloader - `youtube-dl-wpf`
 
-给出yotuube链接，即可完成下载（download)，并（and）上传（upload）到bilibili的操作
+[![Build](https://github.com/database64128/youtube-dl-wpf/actions/workflows/build.yml/badge.svg)](https://github.com/database64128/youtube-dl-wpf/actions/workflows/build.yml)
+[![Release](https://github.com/database64128/youtube-dl-wpf/actions/workflows/release.yml/badge.svg)](https://github.com/database64128/youtube-dl-wpf/actions/workflows/release.yml)
 
-# 附言
-目前只实现了下载（download），因为我感觉盲目地上传（upload），很容易制造垃圾，污染环境，没有什么意思。
+WPF GUI for [youtube-dl](https://github.com/ytdl-org/youtube-dl) and [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
-# 快速开始
+![Home](home.webp "Home")
+![Settings](settings.webp "Settings")
 
-在页面右侧 Releases 下载最新的 .exe 程序，双击打开 或者 从 cmd 中打开
+## Features
 
-# 上手把玩
+- Follow 🎨 system color mode, or choose between 🌃 dark mode and 🔆 light mode.
+- Update youtube-dl/yt-dlp on startup.
+- List all available formats.
+- Override video, audio formats and output container.
+- Embed metadata into downloaded file.
+- Download and embed thumbnails.
+- Download whole playlists.
+- Select items from playlist to download.
+- Select types of subtitles (default, all languages, auto-generated) to download and embed.
+- Specify custom output template.
+- Specify custom download path.
+- Specify custom FFmpeg path.
+- Specify custom proxy.
+- Specify custom command-line arguments.
 
-1、拉取项目
-```shell
-git clone https://github.com/Canwaiting/dnu
+## Usage
+
+1. Download the pre-built binary or build it from source.
+2. Download [yt-dlp](https://github.com/yt-dlp/yt-dlp) or [youtube-dl](https://github.com/ytdl-org/youtube-dl).
+3. It's optional but highly recommended to also download [FFmpeg](https://ffmpeg.org/download.html). Otherwise you won't be able to merge separate video and audio tracks.
+4. The framework-dependent binary requires an installed [.NET Runtime](https://dotnet.microsoft.com/) to run. Alternatively, download the self-contained binary that bundles the runtime.
+5. Run `youtube-dl-wpf.exe`. Go to __Settings__. Set the path to youtube-dl/yt-dlp and FFmpeg.
+6. Go back to the home tab. Paste a video URL and start downloading! 🚀
+
+## FAQ
+
+1.  Q: The __Download__ button is grayed out and I can't click it!
+
+    A: `youtube-dl-wpf` is a simple GUI wrapper. It doesn't bundle any downloader with it. You have to download youtube-dl or yt-dlp for it to work. FFmpeg is required by youtube-dl and yt-dlp when merging separate video and audio tracks, which is the case for most formats on YouTube.
+
+2.  Q: How can I use a proxy to download?
+
+    A: Leave the proxy field empty to use system proxy settings. Otherwise the format is similar to how `curl` accepts proxy strings (e.g. `socks5://localhost:1080/`, `http://localhost:8080/`). Currently the upstream doesn't accept `socks5h` protocol and treat `socks5` as `socks5h` by always resolving the hostname using the proxy. This is tracked in [this issue](https://github.com/ytdl-org/youtube-dl/issues/22618).
+
+3.  Q: Downloading the whole playlist doesn't work!
+
+    A: It's an upstream bug, just like many other issues you might discover. There's nothing I can do. Just report the bug to yt-dlp or youtube-dl, whichever you use.
+
+4.  Q: `youtube-dl` and `yt-dlp` behave differently!
+
+    A: In some cases, yes, and `youtube-dl-wpf` tries to align their behavior by sending different options and arguments for different backends. See the [backends documentation](Backends.md) for more information.
+
+## Known Issues
+
+- 🎉 No known issues!
+
+## To-Do
+
+- [ ] v2.0 - The Parallel Update: download management and download queue for parallel downloads.
+
+## Build
+
+Prerequisites: .NET 7 SDK
+
+Note for packagers: The application by default uses executable directory as config directory. To use user's config directory, define the constant `PACKAGED` when building.
+
+###  Build with Release configuration
+
+```bash
+dotnet build -c Release
 ```
 
-2、进入项目目录
+### Publish as framework-dependent
 
-3、安装依赖（推荐使用 anaconda）
-```
-conda create -n dnu python=3.9.18
-conda activate dnu
-pip install pdm
-pdm install
+```bash
+dotnet publish YoutubeDl.Wpf -c Release
 ```
 
-4、打包源程序（.exe）
+### Publish as self-contained for Windows x64
+
+```bash
+dotnet publish YoutubeDl.Wpf -c Release -r win-x64 --self-contained
 ```
-pyinstaller --onefile dnu.py
+
+### Publish as self-contained for packaging on Windows x64
+
+```bash
+dotnet publish YoutubeDl.Wpf -c Release -p:DefineConstants=PACKAGED -r win-x64 --self-contained
 ```
 
-# 效果展示
-启动
+## License
 
-![run](https://cdn.jsdelivr.net/gh/Canwaiting/picfornote/202310131712107.jpg)
+- This project is licensed under [GPLv3](LICENSE).
+- The icons are from [Material Design Icons](https://materialdesignicons.com/) and are licensed under the [Pictogrammers Free License](https://dev.materialdesignicons.com/license).
+- [`youtube-dl`](https://github.com/ytdl-org/youtube-dl) and [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) are licensed under [The Unlicense](https://github.com/ytdl-org/youtube-dl/blob/master/LICENSE).
+- [Material Design Themes](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit) is licensed under [MIT](https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit/blob/master/LICENSE).
+- [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono) is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+- [ReactiveUI](https://github.com/reactiveui/ReactiveUI) and its dependencies are licensed under [MIT](https://github.com/reactiveui/ReactiveUI/blob/main/LICENSE).
 
-输入 Youtube 视频链接，并等待下载
-![input](https://cdn.jsdelivr.net/gh/Canwaiting/picfornote/202310131731514.jpg)
-
-下载成功后
-
-![data](https://cdn.jsdelivr.net/gh/Canwaiting/picfornote/202310131732756.jpg)
-
-下载后的资源：音频.mp3（最好的音质）、视频.mp4（最高画质不大于1080P）、封面.png
-
-![resource](https://cdn.jsdelivr.net/gh/Canwaiting/picfornote/202310131731481.jpg)
-
-相关数据将会插入数据库中
-
-![](https://cdn.jsdelivr.net/gh/Canwaiting/picfornote/202310131733672.png)
-
-数据行转换成JSON格式
-```
-{
-	"table": "video",
-	"rows":
-	[
-		{
-			"id": 1,
-			"title": "Kanye West - Suzy / Things Change [DONDA 2] [REMASTERED LEAK]",
-			"description": "Kanye West - Suzy / Things Change [DONDA 2] [REMASTERED LEAK]\nUsed AI to increase the quality of Ye's vocals (as the original leak had low quality vocals from the worst mike possible)....",
-			"upload_date": "20231011",
-			"thumbnail": "https://i.ytimg.com/vi/iA9muRwstbs/maxresdefault.jpg",
-			"youtube_id": "iA9muRwstbs",
-			"youtube_url": "https://www.youtube.com/watch?v=iA9muRwstbs",
-			"channel_id": "UCjUki3Pj93EZbs49idRw0Gw",
-			"channel": "[yeunreleased]",
-			"save_name": "iA9muRwstbs",
-			"save_directory": "./iA9muRwstbs"
-		}
-	]
-}
-```
+© 2022 database64128
