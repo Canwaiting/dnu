@@ -55,6 +55,7 @@ namespace YoutubeDl.Wpf.ViewModels
             {
                 new HomeViewModel(SharedSettings, BackendService, queuedTextBoxsink, PresetDialogVM, snackbarMessageQueue),
                 new SettingsViewModel(SharedSettings, BackendService, snackbarMessageQueue),
+                new SubScibeChannelViewModel(SharedSettings, BackendService, snackbarMessageQueue),
             };
 
             SaveSettingsAsyncCommand = ReactiveCommand.CreateFromTask<CancelEventArgs?, bool>(SaveSettingsAsync);

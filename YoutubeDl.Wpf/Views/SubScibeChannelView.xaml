@@ -1,0 +1,32 @@
+﻿<reactiveui:ReactiveUserControl
+    x:Class="YoutubeDl.Wpf.Views.SubScibeChannelView"
+    x:TypeArguments="viewmodels:SubScibeChannelViewModel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+    xmlns:reactiveui="http://reactiveui.net"
+    xmlns:viewmodels="clr-namespace:YoutubeDl.Wpf.ViewModels"
+    mc:Ignorable="d"
+    d:DataContext="{d:DesignInstance Type=viewmodels:SubScibeChannelViewModel}"
+        d:DesignHeight="720" d:DesignWidth="848">
+    <Grid Background="#FFFFFF">
+
+        <WrapPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock  Style="{StaticResource MaterialDesignSubtitle1TextBlock}">
+                        Video link
+            </TextBlock>
+            <TextBox x:Name="linkTextBox"
+                             Margin="10,0,0,0"
+                             Width="384"
+                             materialDesign:HintAssist.Hint="e.g. https://www.youtube.com/watch?v=b2390GAm4d0"/>
+            <Button x:Name="downloadButton"
+                            Margin="4,0,0,0"
+                            Style="{StaticResource MaterialDesignOutlinedSecondaryButton}"
+                            Content="_开始订阅"/>
+        </WrapPanel>
+        <!--<Label VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" FontSize="100" Content="Hello world"></Label>-->
+            
+    </Grid>
+</reactiveui:ReactiveUserControl>
