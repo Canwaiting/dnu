@@ -14,7 +14,7 @@
     <ScrollViewer materialDesign:ScrollViewerAssist.IsAutoHideEnabled="True"
                   HorizontalScrollBarVisibility="Auto"
                   VerticalScrollBarVisibility="Auto">
-        <Grid Margin="16">
+        <Grid Margin="16" Background="White">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />

@@ -26,6 +26,17 @@ namespace YoutubeDl.Wpf.Views
                     view => view.downloadButton)
                     .DisposeWith(disposables);
 
+                //TODO 现在会更新到主页面的Log栏中
+                // Output
+                this.Bind(ViewModel,
+                    viewModel => viewModel.QueuedTextBoxSink.Content,
+                    view => view.resultTextBox.Text)
+                    .DisposeWith(disposables);
+
+                resultTextBox.Events().TextChanged
+                             .Where(_ => WpfHelper.IsScrolledToEnd(resultTextBox))
+                             .Subscribe(_ => resultTextBox.ScrollToEnd())
+                             .DisposeWith(disposables);
             });
         }
     }

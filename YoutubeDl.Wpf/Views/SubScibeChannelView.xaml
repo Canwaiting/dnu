@@ -12,8 +12,13 @@
     d:DataContext="{d:DesignInstance Type=viewmodels:SubScibeChannelViewModel}"
         d:DesignHeight="720" d:DesignWidth="848">
     <Grid Background="#FFFFFF">
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
 
-        <WrapPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <WrapPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
             <TextBlock  Style="{StaticResource MaterialDesignSubtitle1TextBlock}">
                         Video link
             </TextBlock>
@@ -26,7 +31,21 @@
                             Style="{StaticResource MaterialDesignOutlinedSecondaryButton}"
                             Content="_开始订阅"/>
         </WrapPanel>
-        <!--<Label VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" FontSize="100" Content="Hello world"></Label>-->
-            
+        <TextBlock Grid.Row="1"
+                   Margin="8 20 8 8"
+                   Style="{StaticResource MaterialDesignHeadline5TextBlock}">
+            Logs
+        </TextBlock>
+
+        <TextBox x:Name="resultTextBox"
+                 Grid.Row="2"
+                 Margin="8"
+                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                 TextWrapping="NoWrap"
+                 IsReadOnly="True"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 materialDesign:HintAssist.Hint="Output from backend"
+                 FontFamily="pack://application:,,,/Resources/RobotoMono/#Roboto Mono"/>
     </Grid>
 </reactiveui:ReactiveUserControl>

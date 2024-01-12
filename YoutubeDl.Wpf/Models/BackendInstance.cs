@@ -17,30 +17,39 @@ namespace YoutubeDl.Wpf.Models;
 
 public class BackendInstance : ReactiveObject, IEnableLogger
 {
+    // 定义一些私有变量
     private readonly ObservableSettings _settings;
     private readonly BackendService _backendService;
     private readonly Process _process;
 
+    // 生成的下载参数列表
     public List<string> GeneratedDownloadArguments { get; } = new();
 
+    // 下载进度百分比，0.99表示99%
     [Reactive]
-    public double DownloadProgressPercentage { get; set; } // 0.99 is 99%.
+    public double DownloadProgressPercentage { get; set; }
 
+    // 状态是否不确定
     [Reactive]
     public bool StatusIndeterminate { get; set; }
 
+    // 是否正在运行
     [Reactive]
     public bool IsRunning { get; set; }
 
+    // 文件大小字符串
     [Reactive]
     public string FileSizeString { get; set; } = "";
 
+    // 下载速度字符串
     [Reactive]
     public string DownloadSpeedString { get; set; } = "";
 
+    // 下载预计剩余时间字符串
     [Reactive]
     public string DownloadETAString { get; set; } = "";
 
+    // 构造函数
     public BackendInstance(ObservableSettings settings, BackendService backendService)
     {
         _settings = settings;
@@ -56,6 +65,23 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         _process.EnableRaisingEvents = true;
     }
 
+    // 异步运行方法
+    private async Task MyRunAsync()
+    {
+        if (!_process.Start())
+            throw new InvalidOperationException("Method called when the backend process is running.");
+
+        //SetStatusRunning();
+
+        await Task.WhenAll(
+            ReadAndParseLinesAsync(_process.StandardError),
+            ReadAndParseLinesAsync(_process.StandardOutput),
+            _process.WaitForExitAsync());
+
+        //SetStatusStopped();
+    }
+
+    // 异步运行方法
     private async Task RunAsync(CancellationToken cancellationToken = default)
     {
         if (!_process.Start())
@@ -71,6 +97,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         SetStatusStopped();
     }
 
+    // 设置状态为运行中
     private void SetStatusRunning()
     {
         StatusIndeterminate = true;
@@ -78,6 +105,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         _backendService.UpdateProgress();
     }
 
+    // 设置状态为已停止
     private void SetStatusStopped()
     {
         DownloadProgressPercentage = 0.0;
@@ -86,6 +114,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         _backendService.UpdateProgress();
     }
 
+    // 异步读取和解析行
     private async Task ReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default)
     {
         while (true)
@@ -95,24 +124,25 @@ public class BackendInstance : ReactiveObject, IEnableLogger
                 return;
 
             this.Log().Info(line);
-            ParseLine(line);
+            //ParseLine(line);
         }
     }
 
+    // 解析行
     private void ParseLine(ReadOnlySpan<char> line)
     {
-        // Example lines:
+        // 示例行：
         // [download]   0.0% of 36.35MiB at 20.40KiB/s ETA 30:24
         // [download]  65.1% of 36.35MiB at  2.81MiB/s ETA 00:04
         // [download] 100% of 36.35MiB in 00:10
 
-        // Check and strip the download prefix.
+        // 检查并去除下载前缀。
         const string downloadPrefix = "[download] ";
         if (!line.StartsWith(downloadPrefix, StringComparison.Ordinal))
             return;
         line = line[downloadPrefix.Length..];
 
-        // Parse and strip the percentage.
+        // 解析并去除百分比。
         const string percentageSuffix = "% of ";
         var percentageEnd = line.IndexOf(percentageSuffix, StringComparison.Ordinal);
         if (percentageEnd == -1 || !double.TryParse(line[..percentageEnd], NumberStyles.AllowLeadingWhite | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var percentage))
@@ -122,16 +152,16 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         _backendService.UpdateProgress();
         line = line[(percentageEnd + percentageSuffix.Length)..];
 
-        // Case 0: Download in progress
+        // 情况0：下载进行中
         const string speedPrefix = " at ";
         var sizeEnd = line.IndexOf(speedPrefix, StringComparison.Ordinal);
         if (sizeEnd != -1)
         {
-            // Extract and strip file size.
+            // 提取并去除文件大小。
             FileSizeString = line[..sizeEnd].ToString();
             line = line[(sizeEnd + speedPrefix.Length)..];
 
-            // Extract and strip speed.
+            // 提取并去除速度。
             const string etaPrefix = " ETA ";
             var speedEnd = line.IndexOf(etaPrefix, StringComparison.Ordinal);
             if (speedEnd == -1)
@@ -139,20 +169,22 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             DownloadSpeedString = line[..speedEnd].TrimStart().ToString();
             line = line[(speedEnd + etaPrefix.Length)..];
 
-            // Extract ETA string.
+            // 提取ETA字符串。
             DownloadETAString = line.ToString();
             return;
         }
 
-        // Case 1: Download finished
+        // 情况1：下载完成
         sizeEnd = line.IndexOf(" in ", StringComparison.Ordinal);
         if (sizeEnd != -1)
         {
-            // Extract file size.
+            // 提取文件大小。
             FileSizeString = line[..sizeEnd].ToString();
         }
     }
 
+
+    // 生成下载参数
     public void GenerateDownloadArguments(string playlistItems)
     {
         GeneratedDownloadArguments.Clear();
@@ -270,6 +302,27 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
+    // 开始下载的异步方法
+    public async Task PingAsync()
+    {
+        _process.StartInfo.FileName = "cmd.exe";
+        _process.StartInfo.ArgumentList.Clear();
+        //_process.StartInfo.ArgumentList.AddRange(_settings.BackendGlobalArguments.Select(x => x.Argument));
+        //_process.StartInfo.ArgumentList.AddRange(GeneratedDownloadArguments);
+        //_process.StartInfo.ArgumentList.AddRange(_settings.BackendDownloadArguments.Select(x => x.Argument));
+        _process.StartInfo.ArgumentList.Add("ping www.baidu.com");
+
+        try
+        {
+            await MyRunAsync();
+        }
+        catch (Exception ex)
+        {
+            this.Log().Error(ex);
+        }
+    }
+
+    // 开始下载的异步方法
     public async Task StartDownloadAsync(string link, CancellationToken cancellationToken = default)
     {
         _process.StartInfo.FileName = _settings.BackendPath;
@@ -289,6 +342,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
+    // 列出格式的异步方法
     public async Task ListFormatsAsync(string link, CancellationToken cancellationToken = default)
     {
         _process.StartInfo.FileName = _settings.BackendPath;
@@ -312,6 +366,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
+    // 更新的异步方法
     public async Task UpdateAsync(CancellationToken cancellationToken = default)
     {
         _settings.BackendLastUpdateCheck = DateTimeOffset.Now;
@@ -335,6 +390,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
+    // 中止的异步方法
     public async Task AbortAsync(CancellationToken cancellationToken = default)
     {
         if (CtrlCHelper.AttachConsole((uint)_process.Id))
