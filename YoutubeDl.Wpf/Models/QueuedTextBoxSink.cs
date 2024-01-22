@@ -1,5 +1,6 @@
 ﻿using ReactiveUI;
 using ReactiveUI.Fody.Helpers;
+using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using System;

@@ -26,7 +26,7 @@ namespace YoutubeDl.Wpf.Views
                     view => view.downloadButton)
                     .DisposeWith(disposables);
 
-                //TODO 现在会更新到主页面的Log栏中
+                //TODO 现在会更新到mainwindow的Log栏中
                 // Output
                 this.Bind(ViewModel,
                     viewModel => viewModel.QueuedTextBoxSink.Content,

@@ -28,15 +28,15 @@ namespace YoutubeDl.Wpf.ViewModels
 
 
 
-        public SubScibeChannelViewModel(ObservableSettings settings, BackendService backendService, ISnackbarMessageQueue snackbarMessageQueue)
+        public SubScibeChannelViewModel(ObservableSettings settings, BackendService backendService, QueuedTextBoxSink queuedTextBoxSink, ISnackbarMessageQueue snackbarMessageQueue)
         {
             BackendService = backendService;
             BackendInstance = backendService.CreateInstance();
+            QueuedTextBoxSink = queuedTextBoxSink;
+
 
             StartDownloadCommand = ReactiveCommand.CreateFromTask<string>(async (functionName) =>
             {
-                // Your custom logic here
-                Console.WriteLine($"成功触发{functionName}");
                 BackendInstance.PingAsync();
             });
 

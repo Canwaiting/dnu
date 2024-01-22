@@ -21,6 +21,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     private readonly ObservableSettings _settings;
     private readonly BackendService _backendService;
     private readonly Process _process;
+    private readonly Process _myprocess;
 
     // 生成的下载参数列表
     public List<string> GeneratedDownloadArguments { get; } = new();
@@ -63,20 +64,30 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         _process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
         _process.StartInfo.StandardOutputEncoding = Encoding.UTF8;
         _process.EnableRaisingEvents = true;
+
+
+        _myprocess = new();
+        _myprocess.StartInfo.CreateNoWindow = true;
+        _myprocess.StartInfo.UseShellExecute = false;
+        _myprocess.StartInfo.RedirectStandardError = true;
+        _myprocess.StartInfo.RedirectStandardOutput = true;
+        _myprocess.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+        _myprocess.StartInfo.StandardOutputEncoding = Encoding.UTF8;
+        _myprocess.EnableRaisingEvents = true;
     }
 
     // 异步运行方法
     private async Task MyRunAsync()
     {
-        if (!_process.Start())
+        if (!_myprocess.Start())
             throw new InvalidOperationException("Method called when the backend process is running.");
 
         //SetStatusRunning();
 
         await Task.WhenAll(
-            ReadAndParseLinesAsync(_process.StandardError),
-            ReadAndParseLinesAsync(_process.StandardOutput),
-            _process.WaitForExitAsync());
+            MyReadAndParseLinesAsync(_myprocess.StandardError),
+            MyReadAndParseLinesAsync(_myprocess.StandardOutput),
+            _myprocess.WaitForExitAsync());
 
         //SetStatusStopped();
     }
@@ -115,6 +126,21 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     }
 
     // 异步读取和解析行
+    private async Task MyReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default)
+    {
+        while (true)
+        {
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (line is null)
+                return;
+
+            var loggerService = Locator.Current.GetService<LoggerService>();
+            var loggernew = loggerService.GetLogger("loggernew");
+            loggernew.Information(line);
+        }
+    }
+
+    // 异步读取和解析行
     private async Task ReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default)
     {
         while (true)
@@ -123,8 +149,12 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             if (line is null)
                 return;
 
-            this.Log().Info(line);
-            //ParseLine(line);
+            var loggerService = Locator.Current.GetService<LoggerService>();
+            var logger = loggerService.GetLogger("logger");
+            logger.Information(line);
+            //this.Log().Info(line);
+            //this.Log().Info("Hello world");
+            ParseLine(line);
         }
     }
 
@@ -305,12 +335,10 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     // 开始下载的异步方法
     public async Task PingAsync()
     {
-        _process.StartInfo.FileName = "cmd.exe";
-        _process.StartInfo.ArgumentList.Clear();
-        //_process.StartInfo.ArgumentList.AddRange(_settings.BackendGlobalArguments.Select(x => x.Argument));
-        //_process.StartInfo.ArgumentList.AddRange(GeneratedDownloadArguments);
-        //_process.StartInfo.ArgumentList.AddRange(_settings.BackendDownloadArguments.Select(x => x.Argument));
-        _process.StartInfo.ArgumentList.Add("ping www.baidu.com");
+        _myprocess.StartInfo.FileName = "cmd.exe";
+        _myprocess.StartInfo.ArgumentList.Clear();
+        _myprocess.StartInfo.ArgumentList.Add("/c");
+        _myprocess.StartInfo.ArgumentList.Add("ping www.baidu.com");
 
         try
         {
