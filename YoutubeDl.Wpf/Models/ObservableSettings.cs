@@ -115,12 +115,14 @@ public class ObservableSettings : ReactiveObject
         WindowWidth = settings.WindowWidth;
         WindowHeight = settings.WindowHeight;
         Backend = settings.Backend;
-        BackendPath = settings.BackendPath;
+        //BackendPath = settings.BackendPath;
+        //FfmpegPath = settings.FfmpegPath;
+        BackendPath = System.Windows.Forms.Application.StartupPath + "\\Resources\\yt-dlp.exe";
+        FfmpegPath = System.Windows.Forms.Application.StartupPath + "\\Resources\\ffmpeg.exe";
         BackendGlobalArguments = new(settings.BackendGlobalArguments);
         BackendDownloadArguments = new(settings.BackendDownloadArguments);
         BackendAutoUpdate = settings.BackendAutoUpdate;
         BackendLastUpdateCheck = settings.BackendLastUpdateCheck;
-        FfmpegPath = settings.FfmpegPath;
         Proxy = settings.Proxy;
         LoggingMaxEntries = settings.LoggingMaxEntries;
         SelectedPreset = settings.SelectedPreset;
