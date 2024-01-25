@@ -1,4 +1,8 @@
-﻿using DynamicData;
+﻿using System;
+using System.Collections.Generic;
+using System.Net;
+using YoutubeExplode.Common;
+using DynamicData;
 using ReactiveUI;
 using ReactiveUI.Fody.Helpers;
 using Splat;
@@ -12,6 +16,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using YoutubeDl.Wpf.Utils;
+using YoutubeExplode;
+using YoutubeExplode.Playlists;
 
 namespace YoutubeDl.Wpf.Models;
 
@@ -349,6 +355,135 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             this.Log().Error(ex);
         }
     }
+
+    /// <summary>
+    /// 开始订阅
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public async Task StartSubscribeAsync(string link, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await RunSubscibeAsync(link, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            this.Log().Error(ex);
+        }
+    }
+
+    /// <summary>
+    /// 开始更新
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public async Task StartPullLatestAsync(string link=null, CancellationToken cancellationToken = default,string channelId=null)
+    {
+        try
+        {
+            await RunSubscibeAsync(link, cancellationToken,channelId);
+        }
+        catch (Exception ex)
+        {
+            var loggerService = Locator.Current.GetService<LoggerService>();
+            var logger = loggerService.GetLogger("loggernew");
+            logger.Error(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 订阅
+    /// </summary>
+    /// <param name="link">视频链接</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns></returns>
+    /// <exception cref="InvalidOperationException"></exception>
+    private async Task RunSubscibeAsync(string link, CancellationToken cancellationToken = default,string channelId=null)
+    {
+        // 获取日志服务和日志记录器
+        var loggerService = Locator.Current.GetService<LoggerService>();
+        var logger = loggerService.GetLogger("loggernew");
+
+        // 创建视频上下文和YouTube客户端
+        var baseDB = new BaseContext();
+        var videoDB = new VideoContext();
+        baseDB.Database.EnsureCreated();
+
+        Cookie myCookie = new Cookie("cookie", "yourcookie", "/", "youtube.com");
+        IReadOnlyList<System.Net.Cookie> cookies = new List<System.Net.Cookie> { myCookie };
+        var youtube = new YoutubeClient(cookies);
+
+        Video latestVideo = null;
+
+        DateTime latestDateTime = new DateTime();
+        if (string.IsNullOrEmpty(channelId))
+        {
+            // 获取channelId
+            await insertSubscribeChannel(link);
+
+            // 转换视频链接为频道ID
+            channelId = await ConverVideoUrlToChannelId(link);
+        }
+
+        // 获取最新的视频
+        latestVideo = videoDB.Videos.OrderByDescending(v => v.UploadDate).FirstOrDefault();
+        if (latestVideo != null)
+        {
+            latestDateTime = latestVideo.UploadDate;
+        }
+
+        // 获取频道的上传视频
+        List<PlaylistVideo> videos = (List<PlaylistVideo>)await youtube.Channels.GetUploadsAsync(channelId);
+
+        // 遍历视频
+        foreach (PlaylistVideo video in videos)
+        {
+            // 获取视频详情
+            YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(video.Url);
+
+            // 如果视频上传日期早于或等于最新日期，则跳出循环
+            if (latestVideo != null)
+            {
+                if (video_temp.UploadDate.UtcDateTime <= latestDateTime)
+                {
+                    break;
+                }
+            }
+
+            // 添加新的视频到数据库并保存
+            videoDB.Videos.Add(new Video { Title = video_temp.Title, Url = video_temp.Url, UploadDate = video_temp.UploadDate.UtcDateTime});
+            await videoDB.SaveChangesAsync();
+
+            // 记录视频信息
+            logger.Information($"日期: {video_temp.UploadDate.UtcDateTime}");
+            logger.Information("\t");
+            logger.Information($"标题: {video_temp.Title}");
+            logger.Information("\n");
+        }
+    }
+
+    private static async Task<bool> insertSubscribeChannel(string url)
+    {
+        var youtube = new YoutubeClient();
+        var db = new SubscribeChannelContext();
+        bool result = true;
+        YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(url);
+        db.SubscribeChannels.Add(new SubscribeChannel { Name = video_temp.Author.ChannelTitle,ChannelId = video_temp.Author.ChannelId, SubscribeDate = DateTime.Now.RoundDown(TimeSpan.FromSeconds(1)) });
+        await db.SaveChangesAsync();
+
+        return result;
+    }
+
+    private static async Task<string> ConverVideoUrlToChannelId(string url)
+    {
+        var youtube = new YoutubeClient();
+        YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(url);
+        return video_temp.Author.ChannelId;
+    }
+
 
     // 开始下载的异步方法
     public async Task StartDownloadAsync(string link, CancellationToken cancellationToken = default)

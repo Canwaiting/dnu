@@ -177,6 +177,20 @@ namespace YoutubeDl.Wpf.ViewModels
                 x => x.SharedSettings.DownloadPath,
                 (useCustomPath, path) => useCustomPath && Directory.Exists(path));
 
+            // 定义一个变量canRun，它是一个观察者，当以下属性发生变化时，它会重新计算其值
+            // x.Link：链接
+            // x.BackendInstance.IsRunning：后端实例是否正在运行
+            // x.SharedSettings.UseCustomOutputTemplate：是否使用自定义输出模板
+            // x.SharedSettings.UseCustomPath：是否使用自定义路径
+            // x.SharedSettings.CustomOutputTemplate：自定义输出模板
+            // x.SharedSettings.DownloadPath：下载路径
+            // x.SharedSettings.BackendPath：后端路径
+            // 它的值取决于以下条件：
+            // 链接不能为空
+            // 后端实例不能正在运行
+            // 如果使用自定义输出模板，那么自定义输出模板不能为空
+            // 如果使用自定义路径，那么下载路径必须存在
+            // 后端路径不能为空
             var canRun = this.WhenAnyValue(
                 x => x.Link,
                 x => x.BackendInstance.IsRunning,

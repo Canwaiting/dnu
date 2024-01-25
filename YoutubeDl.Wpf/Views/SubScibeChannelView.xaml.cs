@@ -4,6 +4,7 @@ using ReactiveUI;
 using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Shell;
 using YoutubeDl.Wpf.Utils;
@@ -21,13 +22,24 @@ namespace YoutubeDl.Wpf.Views
 
             this.WhenActivated(disposables =>
             {
+                // Link and Start
                 this.BindCommand(ViewModel,
-                    viewModel => viewModel.StartDownloadCommand,
-                    view => view.downloadButton)
+                    viewModel => viewModel.StartSubscribeCommand,
+                    view => view.subscribeButton,
+                    viewModel => viewModel.Link)
                     .DisposeWith(disposables);
 
-                //TODO 现在会更新到mainwindow的Log栏中
-                // Output
+                this.Bind(ViewModel,
+                    viewModel => viewModel.Link,
+                    view => view.linkTextBox.Text)
+                    .DisposeWith(disposables);
+
+                linkTextBox.Events().KeyDown
+                           .Where(x => x.Key == Key.Enter)
+                           .Select(_ => ViewModel!.Link)
+                           .InvokeCommand(ViewModel!.StartSubscribeCommand) // Null forgiving reason: upstream limitation.
+                           .DisposeWith(disposables);
+
                 this.Bind(ViewModel,
                     viewModel => viewModel.QueuedTextBoxSink.Content,
                     view => view.resultTextBox.Text)
@@ -40,4 +52,5 @@ namespace YoutubeDl.Wpf.Views
             });
         }
     }
+
 }

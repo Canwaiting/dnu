@@ -18,7 +18,7 @@
             <RowDefinition/>
         </Grid.RowDefinitions>
 
-        <WrapPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <WrapPanel Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,20,0,0">
             <TextBlock  Style="{StaticResource MaterialDesignSubtitle1TextBlock}">
                         Video link
             </TextBlock>
@@ -26,16 +26,50 @@
                              Margin="10,0,0,0"
                              Width="384"
                              materialDesign:HintAssist.Hint="e.g. https://www.youtube.com/watch?v=b2390GAm4d0"/>
-            <Button x:Name="downloadButton"
+            <Button x:Name="subscribeButton"
                             Margin="4,0,0,0"
                             Style="{StaticResource MaterialDesignOutlinedSecondaryButton}"
                             Content="_开始订阅"/>
         </WrapPanel>
+
+        <DataGrid x:Name="dataGridSubscribeChannelList"
+          Grid.Row="0"
+          Margin="30,70,0,0"
+          Height="150"
+          Width="600"
+          AutoGenerateColumns="True"
+          CanUserAddRows="False"
+          CanUserDeleteRows="False"
+          IsReadOnly="True"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Top"
+          VerticalScrollBarVisibility="Auto"
+          HorizontalScrollBarVisibility="Auto"
+          ItemsSource="{Binding SubscribeChannelList}">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="操作">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button  x:Name="pullLatestButton"
+                                     Command="{Binding Path=DataContext.PullLatestCommand,
+                                        RelativeSource= {RelativeSource FindAncestor,
+                                        AncestorType={x:Type DataGrid}}}"
+                                     CommandParameter="{Binding}"
+                                Content="拉取最新"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+
         <TextBlock Grid.Row="1"
                    Margin="8 20 8 8"
                    Style="{StaticResource MaterialDesignHeadline5TextBlock}">
             Logs
         </TextBlock>
+
+
 
         <TextBox x:Name="resultTextBox"
                  Grid.Row="2"
