@@ -83,22 +83,6 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     }
 
     // 异步运行方法
-    private async Task MyRunAsync()
-    {
-        if (!_myprocess.Start())
-            throw new InvalidOperationException("Method called when the backend process is running.");
-
-        //SetStatusRunning();
-
-        await Task.WhenAll(
-            MyReadAndParseLinesAsync(_myprocess.StandardError),
-            MyReadAndParseLinesAsync(_myprocess.StandardOutput),
-            _myprocess.WaitForExitAsync());
-
-        //SetStatusStopped();
-    }
-
-    // 异步运行方法
     private async Task RunAsync(CancellationToken cancellationToken = default)
     {
         if (!_process.Start())
@@ -338,24 +322,6 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
-    // 开始下载的异步方法
-    public async Task PingAsync()
-    {
-        _myprocess.StartInfo.FileName = "cmd.exe";
-        _myprocess.StartInfo.ArgumentList.Clear();
-        _myprocess.StartInfo.ArgumentList.Add("/c");
-        _myprocess.StartInfo.ArgumentList.Add("ping www.baidu.com");
-
-        try
-        {
-            await MyRunAsync();
-        }
-        catch (Exception ex)
-        {
-            this.Log().Error(ex);
-        }
-    }
-
     /// <summary>
     /// 开始订阅
     /// </summary>
@@ -412,7 +378,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         var videoDB = new VideoContext();
         baseDB.Database.EnsureCreated();
 
-        Cookie myCookie = new Cookie("cookie", "yourcookie", "/", "youtube.com");
+        Cookie myCookie = new Cookie("cookie", "XXXXXX", "/", "youtube.com");
         IReadOnlyList<System.Net.Cookie> cookies = new List<System.Net.Cookie> { myCookie };
         var youtube = new YoutubeClient(cookies);
 
@@ -447,14 +413,18 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             // 如果视频上传日期早于或等于最新日期，则跳出循环
             if (latestVideo != null)
             {
-                if (video_temp.UploadDate.UtcDateTime <= latestDateTime)
+                if (ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime) <= latestDateTime)
                 {
                     break;
                 }
             }
 
             // 添加新的视频到数据库并保存
-            videoDB.Videos.Add(new Video { Title = video_temp.Title, Url = video_temp.Url, UploadDate = video_temp.UploadDate.UtcDateTime});
+            videoDB.Videos.Add(new Video {
+                Title = video_temp.Title,
+                Url = video_temp.Url,
+                UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
+            });
             await videoDB.SaveChangesAsync();
 
             // 记录视频信息
@@ -465,16 +435,37 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
+    /// <summary>
+    /// 新增订阅频道
+    /// </summary>
+    /// <param name="url"></param>
+    /// <returns></returns>
     private static async Task<bool> insertSubscribeChannel(string url)
     {
         var youtube = new YoutubeClient();
         var db = new SubscribeChannelContext();
         bool result = true;
         YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(url);
-        db.SubscribeChannels.Add(new SubscribeChannel { Name = video_temp.Author.ChannelTitle,ChannelId = video_temp.Author.ChannelId, SubscribeDate = DateTime.Now.RoundDown(TimeSpan.FromSeconds(1)) });
+        db.SubscribeChannels.Add(new SubscribeChannel {
+            Name = video_temp.Author.ChannelTitle,
+            ChannelId = video_temp.Author.ChannelId,
+            SubscribeDate = ConvertToChinaStandardTime(DateTime.Now)
+            });
         await db.SaveChangesAsync();
 
         return result;
+    }
+
+    /// <summary>
+    /// 转换成中国标准时间（YYYY-MM-DD HH:MM:SS）
+    /// </summary>
+    /// <returns></returns>
+    private static DateTime ConvertToChinaStandardTime(DateTime input)
+    {
+        TimeZoneInfo chinaZone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+        DateTime output = TimeZoneInfo.ConvertTimeFromUtc(input.ToUniversalTime(), chinaZone);
+        output = new DateTime(output.Year, output.Month, output.Day, output.Hour, output.Minute, output.Second);
+        return output;
     }
 
     private static async Task<string> ConverVideoUrlToChannelId(string url)

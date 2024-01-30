@@ -15,7 +15,7 @@
         <Grid.RowDefinitions>
             <RowDefinition/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition/>
+            <RowDefinition Height="100"/>
         </Grid.RowDefinitions>
 
         <WrapPanel Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,20,0,0">
@@ -34,14 +34,14 @@
 
         <DataGrid x:Name="dataGridSubscribeChannelList"
           Grid.Row="0"
-          Margin="30,70,0,0"
-          Height="150"
-          Width="600"
+          Margin="0,60,0,0"
+          Height="100"
+          Width="800"
           AutoGenerateColumns="True"
           CanUserAddRows="False"
           CanUserDeleteRows="False"
           IsReadOnly="True"
-          HorizontalAlignment="Left"
+          HorizontalAlignment="Center"
           VerticalAlignment="Top"
           VerticalScrollBarVisibility="Auto"
           HorizontalScrollBarVisibility="Auto"
@@ -61,6 +61,47 @@
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
+
+        <DataGrid x:Name="dataGridSubscribeChannelVideoList"
+          Grid.Row="0"
+          Margin="0,170,0,0"
+          Height="380"
+          Width="800"
+          AutoGenerateColumns="False"
+          CanUserAddRows="False"
+          CanUserDeleteRows="False"
+          IsReadOnly="True"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Top"
+          VerticalScrollBarVisibility="Auto"
+          HorizontalScrollBarVisibility="Auto"
+          ItemsSource="{Binding SubscribeChannelVideoList}">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="标题" Binding="{Binding Title}" />
+                <DataGridTextColumn Header="上传日期" Binding="{Binding UploadDate}" />
+                <DataGridTemplateColumn Header="操作">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button  x:Name="pullLatestButton"
+                                     Command="{Binding Path=DataContext.SingleDownloadCommand, 
+                                        RelativeSource= {RelativeSource FindAncestor,
+                                        AncestorType={x:Type DataGrid}}}"
+                                     CommandParameter="{Binding}"
+                                     Content="下载"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox x:Name="newCheckBox" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+
 
 
         <TextBlock Grid.Row="1"

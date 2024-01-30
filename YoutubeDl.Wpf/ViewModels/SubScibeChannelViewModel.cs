@@ -40,6 +40,13 @@ namespace YoutubeDl.Wpf.ViewModels
             set => this.RaiseAndSetIfChanged(ref _subscribeChannelList, value);
         }
 
+        private ObservableCollection<Video> _subscribeChannelVideoList;
+        public ObservableCollection<Video> SubscribeChannelVideoList
+        {
+            get => _subscribeChannelVideoList;
+            set => this.RaiseAndSetIfChanged(ref _subscribeChannelVideoList, value);
+        }
+
 
         [Reactive]
         public string Link { get; set; } = "";
@@ -47,6 +54,14 @@ namespace YoutubeDl.Wpf.ViewModels
         public BackendService BackendService { get; }
         public BackendInstance BackendInstance { get; }
         public QueuedTextBoxSink QueuedTextBoxSink { get; }
+
+        private ReactiveCommand<Video, Unit> _singleDownloadCommand;
+
+        public ReactiveCommand<Video, Unit> SingleDownloadCommand
+        {
+            get { return _singleDownloadCommand; }
+            set { this.RaiseAndSetIfChanged(ref _singleDownloadCommand, value); }
+        }
 
         private ReactiveCommand<SubscribeChannel, Unit> _pullLatestCommand;
 
@@ -58,16 +73,22 @@ namespace YoutubeDl.Wpf.ViewModels
 
         private async void PullLatest(SubscribeChannel currentRow)
         {
-            Console.WriteLine("Hello World");
             await BackendInstance.StartPullLatestAsync(channelId : currentRow.ChannelId);
-            // 在这里添加你的后台代码
-            //获取最新
+        }
+
+
+        private async void SingleDownload(Video currentRow)
+        {
+            await BackendInstance.StartDownloadAsync(currentRow.Url);
+            
         }
 
 
         public SubScibeChannelViewModel(ObservableSettings settings, BackendService backendService, QueuedTextBoxSink queuedTextBoxSink, ISnackbarMessageQueue snackbarMessageQueue)
         {
             PullLatestCommand = ReactiveCommand.Create<SubscribeChannel>(PullLatest);
+            SingleDownloadCommand = ReactiveCommand.Create<Video>(SingleDownload);
+
 
 
             BackendService = backendService;
@@ -75,6 +96,7 @@ namespace YoutubeDl.Wpf.ViewModels
             QueuedTextBoxSink = queuedTextBoxSink;
             VideoList = GetVideoList();
             SubscribeChannelList = GetSubscribeChannelList();
+            SubscribeChannelVideoList = GetSubscribeChannelVideoList(channelId: "hello world");
 
             var canRun = this.WhenAnyValue( x => x.Link, (link) => !string.IsNullOrEmpty(link));
             StartSubscribeCommand = ReactiveCommand.CreateFromTask<string>(StartSubscribeAsync, canRun);
@@ -100,6 +122,17 @@ namespace YoutubeDl.Wpf.ViewModels
             result = new ObservableCollection<SubscribeChannel>(subscribeChannelDB.SubscribeChannels.ToList());
             return result;
         }
+
+        private ObservableCollection<Video> GetSubscribeChannelVideoList(string channelId = null)
+        {
+            ObservableCollection<Video> result = new ObservableCollection<Video>();
+            var baseDB = new BaseContext();
+            baseDB.Database.EnsureCreated();
+            var VideoDB = new VideoContext();
+            result = new ObservableCollection<Video>(VideoDB.Videos.ToList());
+            return result;
+        }
+
 
         private Task StartSubscribeAsync(string link, CancellationToken cancellationToken = default)
         {
