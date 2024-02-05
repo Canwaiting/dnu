@@ -3,7 +3,7 @@ using ReactiveUI;
 using ReactiveUI.Fody.Helpers;
 using Serilog;
 using Splat;
-using Splat.Serilog;
+//using Splat.Serilog;
 using System;
 using System.ComponentModel;
 using System.Threading;
@@ -55,21 +55,17 @@ namespace YoutubeDl.Wpf.ViewModels
             }
 
             // 配置日志
-
-
             var queuedTextBoxsink = new QueuedTextBoxSink(_settings);
             var queuedTextBoxsinknew = new QueuedTextBoxSink(_settings);
-            var logger = new LoggerConfiguration()
+            Serilog.ILogger homViewLogger = new LoggerConfiguration()
                 .WriteTo.Sink(queuedTextBoxsink)
                 .CreateLogger();
-
-            var loggernew = new LoggerConfiguration()
+            Serilog.ILogger subscribeChannelViewLogger = new LoggerConfiguration()
                 .WriteTo.Sink(queuedTextBoxsinknew)
                 .CreateLogger();
-            //Locator.CurrentMutable.UseSerilogFullLogger(loggernew); //TODO 加了这个才有用
-            var loggerService = new LoggerService();
-            loggerService.AddLogger("logger", logger);
-            loggerService.AddLogger("loggernew", loggernew);
+            LoggerService loggerService = new LoggerService();
+            loggerService.AddLogger("homViewLogger", homViewLogger);
+            loggerService.AddLogger("subscribeChannelViewLogger", subscribeChannelViewLogger);
             Locator.CurrentMutable.RegisterConstant(loggerService, typeof(LoggerService));
 
             // 初始化共享设置、后端服务、预设对话框视图模型和标签页
@@ -78,9 +74,9 @@ namespace YoutubeDl.Wpf.ViewModels
             PresetDialogVM = new(ControlDialog);
             Tabs = new object[]
             {
+                new SubScibeChannelViewModel(SharedSettings, BackendService,queuedTextBoxsinknew, snackbarMessageQueue),
                 new HomeViewModel(SharedSettings, BackendService, queuedTextBoxsink, PresetDialogVM, snackbarMessageQueue),
                 new SettingsViewModel(SharedSettings, BackendService, snackbarMessageQueue),
-                new SubScibeChannelViewModel(SharedSettings, BackendService,queuedTextBoxsinknew, snackbarMessageQueue),
             };
 
             // 初始化保存设置的异步命令

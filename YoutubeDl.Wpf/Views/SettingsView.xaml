@@ -10,7 +10,7 @@
     xmlns:viewmodels="clr-namespace:YoutubeDl.Wpf.ViewModels"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=viewmodels:SettingsViewModel}"
-    d:DesignHeight="720" d:DesignWidth="848">
+    d:DesignHeight="{StaticResource WindowHeight}" d:DesignWidth="{StaticResource WindowWidth}">
     <ScrollViewer materialDesign:ScrollViewerAssist.IsAutoHideEnabled="True"
                   HorizontalScrollBarVisibility="Auto"
                   VerticalScrollBarVisibility="Auto">

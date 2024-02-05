@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Windows.Forms;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using YoutubeExplode.Common;
@@ -6,7 +7,6 @@ using DynamicData;
 using ReactiveUI;
 using ReactiveUI.Fody.Helpers;
 using Splat;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -83,19 +83,35 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     }
 
     // 异步运行方法
-    private async Task RunAsync(CancellationToken cancellationToken = default)
+    private async Task RunAsync(CancellationToken cancellationToken = default, Serilog.ILogger logger = null)
     {
         if (!_process.Start())
             throw new InvalidOperationException("Method called when the backend process is running.");
 
+
         SetStatusRunning();
 
         await Task.WhenAll(
-            ReadAndParseLinesAsync(_process.StandardError, cancellationToken),
-            ReadAndParseLinesAsync(_process.StandardOutput, cancellationToken),
+            ReadAndParseLinesAsync(_process.StandardError, cancellationToken, logger),
+            ReadAndParseLinesAsync(_process.StandardOutput, cancellationToken, logger),
             _process.WaitForExitAsync(cancellationToken));
 
         SetStatusStopped();
+    }
+
+    // 异步运行方法
+    private async Task RunNormalDownloadAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_process.Start())
+            throw new InvalidOperationException("Method called when the backend process is running.");
+
+        var loggerService = Locator.Current.GetService<LoggerService>();
+        var logger = loggerService.GetLogger("subscribeChannelViewLogger");
+
+        await Task.WhenAll(
+            ReadAndParseLinesAsync(_process.StandardError, cancellationToken, logger),
+            ReadAndParseLinesAsync(_process.StandardOutput, cancellationToken, logger),
+            _process.WaitForExitAsync(cancellationToken));
     }
 
     // 设置状态为运行中
@@ -131,19 +147,23 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     }
 
     // 异步读取和解析行
-    private async Task ReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default)
+    private async Task ReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default, Serilog.ILogger logger = null)
     {
         while (true)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
-            if (line is null)
+            if (line == null)
+            {
                 return;
+            }
 
-            var loggerService = Locator.Current.GetService<LoggerService>();
-            var logger = loggerService.GetLogger("logger");
-            logger.Information(line);
-            //this.Log().Info(line);
-            //this.Log().Info("Hello world");
+            if (logger == null)
+            {
+                return;
+            }
+
+            string message = line + "\n";
+            logger.Information(message);
             ParseLine(line);
         }
     }
@@ -322,118 +342,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
 
-    /// <summary>
-    /// 开始订阅
-    /// </summary>
-    /// <param name="link"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public async Task StartSubscribeAsync(string link, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await RunSubscibeAsync(link, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            this.Log().Error(ex);
-        }
-    }
 
-    /// <summary>
-    /// 开始更新
-    /// </summary>
-    /// <param name="link"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public async Task StartPullLatestAsync(string link=null, CancellationToken cancellationToken = default,string channelId=null)
-    {
-        try
-        {
-            await RunSubscibeAsync(link, cancellationToken,channelId);
-        }
-        catch (Exception ex)
-        {
-            var loggerService = Locator.Current.GetService<LoggerService>();
-            var logger = loggerService.GetLogger("loggernew");
-            logger.Error(ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// 订阅
-    /// </summary>
-    /// <param name="link">视频链接</param>
-    /// <param name="cancellationToken">取消令牌</param>
-    /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    private async Task RunSubscibeAsync(string link, CancellationToken cancellationToken = default,string channelId=null)
-    {
-        // 获取日志服务和日志记录器
-        var loggerService = Locator.Current.GetService<LoggerService>();
-        var logger = loggerService.GetLogger("loggernew");
-
-        // 创建视频上下文和YouTube客户端
-        var baseDB = new BaseContext();
-        var videoDB = new VideoContext();
-        baseDB.Database.EnsureCreated();
-
-        Cookie myCookie = new Cookie("cookie", "XXXXXX", "/", "youtube.com");
-        IReadOnlyList<System.Net.Cookie> cookies = new List<System.Net.Cookie> { myCookie };
-        var youtube = new YoutubeClient(cookies);
-
-        Video latestVideo = null;
-
-        DateTime latestDateTime = new DateTime();
-        if (string.IsNullOrEmpty(channelId))
-        {
-            // 获取channelId
-            await insertSubscribeChannel(link);
-
-            // 转换视频链接为频道ID
-            channelId = await ConverVideoUrlToChannelId(link);
-        }
-
-        // 获取最新的视频
-        latestVideo = videoDB.Videos.OrderByDescending(v => v.UploadDate).FirstOrDefault();
-        if (latestVideo != null)
-        {
-            latestDateTime = latestVideo.UploadDate;
-        }
-
-        // 获取频道的上传视频
-        List<PlaylistVideo> videos = (List<PlaylistVideo>)await youtube.Channels.GetUploadsAsync(channelId);
-
-        // 遍历视频
-        foreach (PlaylistVideo video in videos)
-        {
-            // 获取视频详情
-            YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(video.Url);
-
-            // 如果视频上传日期早于或等于最新日期，则跳出循环
-            if (latestVideo != null)
-            {
-                if (ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime) <= latestDateTime)
-                {
-                    break;
-                }
-            }
-
-            // 添加新的视频到数据库并保存
-            videoDB.Videos.Add(new Video {
-                Title = video_temp.Title,
-                Url = video_temp.Url,
-                UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
-            });
-            await videoDB.SaveChangesAsync();
-
-            // 记录视频信息
-            logger.Information($"日期: {video_temp.UploadDate.UtcDateTime}");
-            logger.Information("\t");
-            logger.Information($"标题: {video_temp.Title}");
-            logger.Information("\n");
-        }
-    }
 
     /// <summary>
     /// 新增订阅频道
@@ -475,10 +384,19 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         return video_temp.Author.ChannelId;
     }
 
+    LoggerService loggerService = Locator.Current.GetService<LoggerService>();
 
-    // 开始下载的异步方法
+    #region HomeView
+    /// <summary>
+    /// 开始下载（自定义参数）
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public async Task StartDownloadAsync(string link, CancellationToken cancellationToken = default)
     {
+        Serilog.ILogger logger = loggerService.GetLogger("homeViewLogger");
+
         _process.StartInfo.FileName = _settings.BackendPath;
         _process.StartInfo.ArgumentList.Clear();
         _process.StartInfo.ArgumentList.AddRange(_settings.BackendGlobalArguments.Select(x => x.Argument));
@@ -488,17 +406,24 @@ public class BackendInstance : ReactiveObject, IEnableLogger
 
         try
         {
-            await RunAsync(cancellationToken);
+            await RunAsync(cancellationToken, logger);
         }
         catch (Exception ex)
         {
-            this.Log().Error(ex);
+            logger.Error(ex.Message);
         }
     }
 
-    // 列出格式的异步方法
+    /// <summary>
+    /// 列出可下载格式
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     public async Task ListFormatsAsync(string link, CancellationToken cancellationToken = default)
     {
+        Serilog.ILogger logger = loggerService.GetLogger("homeViewLogger");
+
         _process.StartInfo.FileName = _settings.BackendPath;
         _process.StartInfo.ArgumentList.Clear();
         _process.StartInfo.ArgumentList.AddRange(_settings.BackendGlobalArguments.Select(x => x.Argument));
@@ -512,13 +437,249 @@ public class BackendInstance : ReactiveObject, IEnableLogger
 
         try
         {
-            await RunAsync(cancellationToken);
+            await RunAsync(cancellationToken, logger);
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex.Message);
+        }
+    }
+    #endregion
+
+    #region SubscribeChannelView
+    /// <summary>
+    /// 开始下载（固定参数：取最好的视频和音频合并成mp4文件，视频质量最高不超过1080p）
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public async Task StartNormalDownloadAsync(string link, CancellationToken cancellationToken = default)
+    {
+        //TODO 下载壁纸，单独下载这些东西，加个checkbox，下载官方字幕（自动生成 / 原channel给出）
+        //TODO 要弄成选着列表的时候就可以直接下载
+
+        Serilog.ILogger logger = loggerService.GetLogger("subscribeChannelViewLogger");
+
+        _process.StartInfo.FileName = _settings.BackendPath;
+        _process.StartInfo.ArgumentList.Clear();
+        _process.StartInfo.ArgumentList.Add("-f bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]"); //备注：非常神奇，格式里面不能加引号，不然识别无效
+        _process.StartInfo.ArgumentList.Add("-o %(title)s"); //备注：这个也挺神奇的，如果不加后缀，会自动加上后缀，加了反而两个后缀了
+        _process.StartInfo.ArgumentList.Add(link);
+
+        try
+        {
+            await RunNormalDownloadAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 开始订阅
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public async Task StartSubscribeAsync(string link, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await RunSubscibeAsync(link, cancellationToken);
         }
         catch (Exception ex)
         {
             this.Log().Error(ex);
         }
     }
+    /// <summary>
+    /// 订阅
+    /// </summary>
+    /// <param name="link">视频链接</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns></returns>
+    /// <exception cref="InvalidOperationException"></exception>
+    private async Task RunSubscibeAsync(string link, CancellationToken cancellationToken = default, string channelId = null)
+    {
+
+        var logger = loggerService.GetLogger("subscribeChannelViewLogger");
+
+        //初始化
+        var baseDB = new BaseContext();
+        var videoDB = new VideoContext();
+        baseDB.Database.EnsureCreated();
+        Cookie myCookie = new Cookie("cookie", "XXXXXX", "/", "youtube.com"); //如果提示拉取限制，请将XXXXXX替换成自己的cookie
+        IReadOnlyList<System.Net.Cookie> cookies = new List<System.Net.Cookie> { myCookie };
+        var youtube = new YoutubeClient(cookies);
+        Video latestVideo = null;
+        DateTime latestDateTime = new DateTime();
+
+        //获取channelId
+        if (string.IsNullOrEmpty(channelId))
+        {
+            await insertSubscribeChannel(link);
+            channelId = await ConverVideoUrlToChannelId(link);
+        }
+
+        //获取频道的上传视频
+        List<PlaylistVideo> videos = (List<PlaylistVideo>)await youtube.Channels.GetUploadsAsync(channelId);
+
+        //弹窗
+        string message =
+            $"该频道视频总数为：{videos.Count}" +
+            $"是否需要在拉取信息的同时，进行下载？" +
+            $"（如选否，后续可自行下载）";
+        string caption = "温馨提示";
+        var result = MessageBox.Show(message, caption,
+                                     MessageBoxButtons.YesNo,
+                                     MessageBoxIcon.Question);
+
+        foreach (PlaylistVideo video in videos)
+        {
+            // 获取视频详情
+            YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(video.Url);
+
+            if (result == DialogResult.Yes)
+            {
+                await StartNormalDownloadAsync(video_temp.Url);
+            }
+
+            // 添加新的视频到数据库并保存
+            videoDB.Videos.Add(new Video
+            {
+                Title = video_temp.Title,
+                Url = video_temp.Url,
+                UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
+            });
+            await videoDB.SaveChangesAsync();
+
+            // 记录视频信息
+            logger.Information($"日期: {video_temp.UploadDate.UtcDateTime}");
+            logger.Information("\t");
+            logger.Information($"标题: {video_temp.Title}");
+            logger.Information("\n");
+        }
+    }
+
+    /// <summary>
+    /// 开始更新
+    /// </summary>
+    /// <param name="link"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public async Task StartPullLatestAsync(string link = null, CancellationToken cancellationToken = default, string channelId = null)
+    {
+        var logger = loggerService.GetLogger("subscribeChannelViewLogger");
+
+        try
+        {
+            await RunPullLatestAsync(link, cancellationToken, channelId);
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 拉取最新 
+    /// </summary>
+    /// <param name="link">视频链接</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns></returns>
+    /// <exception cref="InvalidOperationException"></exception>
+    private async Task RunPullLatestAsync(string link, CancellationToken cancellationToken = default, string channelId = null)
+    {
+
+        var logger = loggerService.GetLogger("subscribeChannelViewLogger");
+
+        //初始化
+        var baseDB = new BaseContext();
+        var videoDB = new VideoContext();
+        baseDB.Database.EnsureCreated();
+        Cookie myCookie = new Cookie("cookie", "XXXXXX", "/", "youtube.com"); //如果提示拉取限制，请将XXXXXX替换成自己的cookie
+        IReadOnlyList<System.Net.Cookie> cookies = new List<System.Net.Cookie> { myCookie };
+        var youtube = new YoutubeClient(cookies);
+        Video latestVideo = null;
+        DateTime latestDateTime = new DateTime();
+
+        //获取channelId
+        if (string.IsNullOrEmpty(channelId))
+        {
+            await insertSubscribeChannel(link);
+            channelId = await ConverVideoUrlToChannelId(link);
+        }
+
+        //获取数据库中最新的视频
+        latestVideo = videoDB.Videos.OrderByDescending(v => v.UploadDate).FirstOrDefault();
+        if (latestVideo != null)
+        {
+            latestDateTime = latestVideo.UploadDate;
+        }
+        string format = "yyyy-MM-dd HH-mm-ss";
+        string latestDateTimeStr = latestDateTime.ToString(format);
+
+        //获取频道的上传视频
+        List<PlaylistVideo> videos = (List<PlaylistVideo>)await youtube.Channels.GetUploadsAsync(channelId);
+
+
+        //获取需要更新的视频列表
+        List<Video> newerVideos = new List<Video>();
+        foreach (PlaylistVideo video in videos)
+        {
+            // 获取视频详情
+            YoutubeExplode.Videos.Video video_temp = await youtube.Videos.GetAsync(video.Url);
+
+            // 如果视频上传日期早于或等于最新日期，则跳出循环
+            if (latestVideo != null)
+            {
+                if (ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime) <= latestDateTime)
+                {
+                    break;
+                }
+                else
+                {
+                    newerVideos.Add(new Video
+                    {
+                        Title = video_temp.Title,
+                        Url = video_temp.Url,
+                        UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
+                    });
+                }
+            }
+        }
+
+        //弹窗
+        string message =
+            $"当前数据库中最新视频：{latestVideo.Title}，日期：{latestDateTimeStr}\n" +
+            $"截止当前日期：{DateTime.Now.ToString(format)}，相差视频数为：{newerVideos.Count}" +
+            $"是否需要在拉取信息的同时，进行下载？" +
+            $"（如选否，后续可自行下载）";
+        string caption = "温馨提示";
+        var result = MessageBox.Show(message, caption,
+                                     MessageBoxButtons.YesNo,
+                                     MessageBoxIcon.Question);
+
+        foreach (Video video in newerVideos)
+        {
+            if (result == DialogResult.Yes)
+            {
+                await StartNormalDownloadAsync(video.Url);
+            }
+
+            // 添加新的视频到数据库并保存
+            videoDB.Videos.Add(video);
+            await videoDB.SaveChangesAsync();
+
+            // 记录视频信息
+            logger.Information($"日期: {video.UploadDate}");
+            logger.Information("\t");
+            logger.Information($"标题: {video.Title}");
+            logger.Information("\n");
+        }
+    }
+    #endregion
 
     // 更新的异步方法
     public async Task UpdateAsync(CancellationToken cancellationToken = default)

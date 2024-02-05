@@ -55,12 +55,12 @@ namespace YoutubeDl.Wpf.ViewModels
         public BackendInstance BackendInstance { get; }
         public QueuedTextBoxSink QueuedTextBoxSink { get; }
 
-        private ReactiveCommand<Video, Unit> _singleDownloadCommand;
+        private ReactiveCommand<Video, Unit> _normalingleDownloadCommand;
 
-        public ReactiveCommand<Video, Unit> SingleDownloadCommand
+        public ReactiveCommand<Video, Unit> NormalDownloadCommand
         {
-            get { return _singleDownloadCommand; }
-            set { this.RaiseAndSetIfChanged(ref _singleDownloadCommand, value); }
+            get { return _normalingleDownloadCommand; }
+            set { this.RaiseAndSetIfChanged(ref _normalingleDownloadCommand, value); }
         }
 
         private ReactiveCommand<SubscribeChannel, Unit> _pullLatestCommand;
@@ -77,17 +77,20 @@ namespace YoutubeDl.Wpf.ViewModels
         }
 
 
-        private async void SingleDownload(Video currentRow)
+        /// <summary>
+        /// 普通下载（最高1080p + 最好音质 合并输出mp4）
+        /// yt-dlp -f "bestvideo[height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o "%(title)s.%(ext)s" 视频链接
+        /// </summary>
+        /// <param name="currentRow"></param>
+        private async void NormalDownload(Video currentRow)
         {
-            await BackendInstance.StartDownloadAsync(currentRow.Url);
-            
+            await BackendInstance.StartNormalDownloadAsync(currentRow.Url);
         }
-
 
         public SubScibeChannelViewModel(ObservableSettings settings, BackendService backendService, QueuedTextBoxSink queuedTextBoxSink, ISnackbarMessageQueue snackbarMessageQueue)
         {
             PullLatestCommand = ReactiveCommand.Create<SubscribeChannel>(PullLatest);
-            SingleDownloadCommand = ReactiveCommand.Create<Video>(SingleDownload);
+            NormalDownloadCommand = ReactiveCommand.Create<Video>(NormalDownload);
 
 
 

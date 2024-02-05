@@ -1,0 +1,2 @@
+ALTER TABLE Videos ADD IsUpload INTEGER;
+ALTER TABLE Videos ADD IsDownload INTEGER;

@@ -10,7 +10,7 @@
     xmlns:viewmodels="clr-namespace:YoutubeDl.Wpf.ViewModels"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=viewmodels:HomeViewModel}"
-        d:DesignHeight="720" d:DesignWidth="848">
+        d:DesignHeight="{StaticResource WindowHeight}" d:DesignWidth="{StaticResource WindowWidth}">
     <Grid Margin="16" Background="White">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

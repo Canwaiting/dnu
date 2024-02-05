@@ -10,33 +10,25 @@
     xmlns:viewmodels="clr-namespace:YoutubeDl.Wpf.ViewModels"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=viewmodels:SubScibeChannelViewModel}"
-        d:DesignHeight="720" d:DesignWidth="848">
+    d:DesignHeight="730" d:DesignWidth="1209"
+    >
     <Grid Background="#FFFFFF">
         <Grid.RowDefinitions>
+            <RowDefinition Height="330"/>
             <RowDefinition/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="100"/>
         </Grid.RowDefinitions>
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="800"/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <WrapPanel Grid.Column="0" Orientation="Vertical">
 
-        <WrapPanel Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,20,0,0">
-            <TextBlock  Style="{StaticResource MaterialDesignSubtitle1TextBlock}">
-                        Video link
-            </TextBlock>
-            <TextBox x:Name="linkTextBox"
-                             Margin="10,0,0,0"
-                             Width="384"
-                             materialDesign:HintAssist.Hint="e.g. https://www.youtube.com/watch?v=b2390GAm4d0"/>
-            <Button x:Name="subscribeButton"
-                            Margin="4,0,0,0"
-                            Style="{StaticResource MaterialDesignOutlinedSecondaryButton}"
-                            Content="_开始订阅"/>
-        </WrapPanel>
-
-        <DataGrid x:Name="dataGridSubscribeChannelList"
+                <DataGrid x:Name="dataGridSubscribeChannelList"
           Grid.Row="0"
-          Margin="0,60,0,0"
-          Height="100"
-          Width="800"
+          Margin="20,20,0,0"
+          Width="760"
+          Height="250"
           AutoGenerateColumns="True"
           CanUserAddRows="False"
           CanUserDeleteRows="False"
@@ -46,27 +38,68 @@
           VerticalScrollBarVisibility="Auto"
           HorizontalScrollBarVisibility="Auto"
           ItemsSource="{Binding SubscribeChannelList}">
-            <DataGrid.Columns>
-                <DataGridTemplateColumn Header="操作">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <Button  x:Name="pullLatestButton"
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="操作">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button  x:Name="pullLatestButton"
                                      Command="{Binding Path=DataContext.PullLatestCommand,
                                         RelativeSource= {RelativeSource FindAncestor,
                                         AncestorType={x:Type DataGrid}}}"
                                      CommandParameter="{Binding}"
                                 Content="拉取最新"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+
+                <WrapPanel Grid.Row="0" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="20,10,0,0">
+                    <TextBlock  Style="{StaticResource MaterialDesignSubtitle1TextBlock}" FontSize="13" VerticalAlignment="Center">
+                        Video link
+                    </TextBlock>
+                    <TextBox x:Name="linkTextBox"
+                             Margin="10,0,0,0"
+                             Width="200"
+                             materialDesign:HintAssist.Hint="e.g. https://www.youtube.com/watch?v=b2390GAm4d0"/>
+                    <Button x:Name="subscribeButton"
+                            Margin="4,0,0,0"
+                            Style="{StaticResource MaterialDesignOutlinedSecondaryButton}"
+                            Content="_开始订阅"/>
+
+                    <CheckBox Margin="10,0,0,0">无需询问，自动下载</CheckBox>
+                </WrapPanel>
+            </WrapPanel>
+
+            <WrapPanel Grid.Column="1" Orientation="Vertical">
+                <TextBlock
+                   Margin="0,0,0,0"
+                   FontSize="13"
+                   Style="{StaticResource MaterialDesignHeadline5TextBlock}">
+            Logs
+                </TextBlock>
+
+                <TextBox x:Name="resultTextBox"
+                 HorizontalAlignment="Center"
+                 Margin="16,8,0,0"
+                 Height="300"
+                 Width="370"
+                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                 TextWrapping="NoWrap"
+                 IsReadOnly="True"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 materialDesign:HintAssist.Hint="Output from backend"
+                 FontFamily="pack://application:,,,/Resources/RobotoMono/#Roboto Mono"/>
+            </WrapPanel>
+        </Grid>
 
         <DataGrid x:Name="dataGridSubscribeChannelVideoList"
-          Grid.Row="0"
-          Margin="0,170,0,0"
+          Grid.Row="1"
+          Margin="0,10,0,0"
           Height="380"
-          Width="800"
+          Width="1100"
           AutoGenerateColumns="False"
           CanUserAddRows="False"
           CanUserDeleteRows="False"
@@ -83,7 +116,7 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Button  x:Name="pullLatestButton"
-                                     Command="{Binding Path=DataContext.SingleDownloadCommand, 
+                                     Command="{Binding Path=DataContext.NormalDownloadCommand, 
                                         RelativeSource= {RelativeSource FindAncestor,
                                         AncestorType={x:Type DataGrid}}}"
                                      CommandParameter="{Binding}"
@@ -100,27 +133,5 @@
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
-
-
-
-
-        <TextBlock Grid.Row="1"
-                   Margin="8 20 8 8"
-                   Style="{StaticResource MaterialDesignHeadline5TextBlock}">
-            Logs
-        </TextBlock>
-
-
-
-        <TextBox x:Name="resultTextBox"
-                 Grid.Row="2"
-                 Margin="8"
-                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                 TextWrapping="NoWrap"
-                 IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 materialDesign:HintAssist.Hint="Output from backend"
-                 FontFamily="pack://application:,,,/Resources/RobotoMono/#Roboto Mono"/>
     </Grid>
 </reactiveui:ReactiveUserControl>

@@ -122,10 +122,8 @@ public class ObservableSettings : ReactiveObject
         WindowWidth = settings.WindowWidth; // 设置窗口宽度
         WindowHeight = settings.WindowHeight; // 设置窗口高度
         Backend = settings.Backend; // 设置后端类型
-        //BackendPath = settings.BackendPath;
-        //FfmpegPath = settings.FfmpegPath;
-        BackendPath = System.Windows.Forms.Application.StartupPath + "\\Resources\\yt-dlp.exe"; // 设置后端路径
-        FfmpegPath = System.Windows.Forms.Application.StartupPath + "\\Resources\\ffmpeg.exe"; // 设置Ffmpeg路径
+        BackendPath = settings.BackendPath;
+        FfmpegPath = settings.FfmpegPath;
         BackendGlobalArguments = new(settings.BackendGlobalArguments); // 设置后端全局参数
         BackendDownloadArguments = new(settings.BackendDownloadArguments); // 设置后端下载参数
         BackendAutoUpdate = settings.BackendAutoUpdate; // 设置后端自动更新
