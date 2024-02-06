@@ -12,5 +12,6 @@ namespace YoutubeDl.Wpf.Models
         public string Name { get; set; }
         public string ChannelId { get; set; }
         public DateTime SubscribeDate { get; set; }
+        public DateTime? LastPullLatestDate { get; set; } //上一次拉取最新的时间
     }
 }

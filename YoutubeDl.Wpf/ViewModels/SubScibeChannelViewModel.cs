@@ -24,6 +24,13 @@ namespace YoutubeDl.Wpf.ViewModels
 {
     public class SubScibeChannelViewModel : ReactiveValidationObject
     {
+        private string _labelSubscribeChannelVideoList;
+        public string LabelSubscribeChannelVideoList
+        {
+            get => _labelSubscribeChannelVideoList;
+            set => this.RaiseAndSetIfChanged(ref _labelSubscribeChannelVideoList, value);
+        }
+
         public ReactiveCommand<string, Unit> StartSubscribeCommand { get; }
 
         private ObservableCollection<Video> _videoList;
@@ -71,9 +78,22 @@ namespace YoutubeDl.Wpf.ViewModels
             set { this.RaiseAndSetIfChanged(ref _pullLatestCommand, value); }
         }
 
+        private ReactiveCommand<SubscribeChannel, Unit> _showSubscribeChannelVideosCommand;
+
+        public ReactiveCommand<SubscribeChannel, Unit> ShowSubscribeChannelVideosCommand
+        {
+            get { return _showSubscribeChannelVideosCommand; }
+            set { this.RaiseAndSetIfChanged(ref _showSubscribeChannelVideosCommand, value); }
+        }
+
         private async void PullLatest(SubscribeChannel currentRow)
         {
             await BackendInstance.StartPullLatestAsync(channelId : currentRow.ChannelId);
+        }
+
+        private void ShowSubscribeChannelVideos(SubscribeChannel currentRow)
+        {
+            GetSubscribeChannelVideoList(channelId : currentRow.ChannelId);
         }
 
 
@@ -90,16 +110,15 @@ namespace YoutubeDl.Wpf.ViewModels
         public SubScibeChannelViewModel(ObservableSettings settings, BackendService backendService, QueuedTextBoxSink queuedTextBoxSink, ISnackbarMessageQueue snackbarMessageQueue)
         {
             PullLatestCommand = ReactiveCommand.Create<SubscribeChannel>(PullLatest);
+            ShowSubscribeChannelVideosCommand = ReactiveCommand.Create<SubscribeChannel>(ShowSubscribeChannelVideos);
             NormalDownloadCommand = ReactiveCommand.Create<Video>(NormalDownload);
-
-
 
             BackendService = backendService;
             BackendInstance = backendService.CreateInstance();
             QueuedTextBoxSink = queuedTextBoxSink;
             VideoList = GetVideoList();
             SubscribeChannelList = GetSubscribeChannelList();
-            SubscribeChannelVideoList = GetSubscribeChannelVideoList(channelId: "hello world");
+            SubscribeChannelVideoList = GetSubscribeChannelVideoList();
 
             var canRun = this.WhenAnyValue( x => x.Link, (link) => !string.IsNullOrEmpty(link));
             StartSubscribeCommand = ReactiveCommand.CreateFromTask<string>(StartSubscribeAsync, canRun);
@@ -128,15 +147,40 @@ namespace YoutubeDl.Wpf.ViewModels
 
         private ObservableCollection<Video> GetSubscribeChannelVideoList(string channelId = null)
         {
+            string channelName = "";
+            if (!string.IsNullOrEmpty(channelId))
+            {
+                using(var context = new SubscribeChannelContext())
+                {
+                    var channel = context.SubscribeChannels.FirstOrDefault(x => x.ChannelId == channelId);
+                    if (channel != null)
+                    {
+                        channelName = channel.Name;
+                    }
+                }
+            }
+
             ObservableCollection<Video> result = new ObservableCollection<Video>();
             var baseDB = new BaseContext();
             baseDB.Database.EnsureCreated();
             var VideoDB = new VideoContext();
             result = new ObservableCollection<Video>(VideoDB.Videos.ToList());
+
+            if (string.IsNullOrEmpty(channelName))
+            {
+                channelName = "所有频道";
+            }
+            LabelSubscribeChannelVideoList = $"{channelName}的数据：\t\t\t{result.Count()}条";
+
             return result;
         }
 
-
+        /// <summary>
+        /// 新增订阅频道
+        /// </summary>
+        /// <param name="link"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         private Task StartSubscribeAsync(string link, CancellationToken cancellationToken = default)
         {
             return BackendInstance.StartSubscribeAsync(link, cancellationToken);

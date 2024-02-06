@@ -8,10 +8,17 @@
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:reactiveui="http://reactiveui.net"
     xmlns:viewmodels="clr-namespace:YoutubeDl.Wpf.ViewModels"
+    xmlns:local="clr-namespace:YoutubeDl.Wpf.Models"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance Type=viewmodels:SubScibeChannelViewModel}"
     d:DesignHeight="730" d:DesignWidth="1209"
     >
+
+    <UserControl.Resources>
+        <local:IsDownloadConverter x:Key="IsDownloadConverter"/>
+        <local:IsUploadConverter x:Key="IsUploadConverter"/>
+    </UserControl.Resources>
+
     <Grid Background="#FFFFFF">
         <Grid.RowDefinitions>
             <RowDefinition Height="330"/>
@@ -29,7 +36,7 @@
           Margin="20,20,0,0"
           Width="760"
           Height="250"
-          AutoGenerateColumns="True"
+          AutoGenerateColumns="False"
           CanUserAddRows="False"
           CanUserDeleteRows="False"
           IsReadOnly="True"
@@ -39,7 +46,11 @@
           HorizontalScrollBarVisibility="Auto"
           ItemsSource="{Binding SubscribeChannelList}">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="操作">
+                        <DataGridTextColumn Header="名称" Binding="{Binding Name}" />
+                        <DataGridTextColumn Header="订阅日期" Binding="{Binding SubscribeDate}" />
+                        <DataGridTextColumn Header="上次更新日期"/>
+                        <DataGridTextColumn Header="目前视频总数"/>
+                        <DataGridTemplateColumn Header="操作1">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button  x:Name="pullLatestButton"
@@ -48,6 +59,18 @@
                                         AncestorType={x:Type DataGrid}}}"
                                      CommandParameter="{Binding}"
                                 Content="拉取最新"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="操作2">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button  x:Name="pullLatestButton"
+                                     Command="{Binding Path=DataContext.ShowSubscribeChannelVideosCommand,
+                                        RelativeSource= {RelativeSource FindAncestor,
+                                        AncestorType={x:Type DataGrid}}}"
+                                     CommandParameter="{Binding}"
+                                Content="展示数据"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -95,10 +118,11 @@
             </WrapPanel>
         </Grid>
 
+        <Label Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top" FontWeight="Bold" FontSize="15" Margin="30,5,0,0" Name="labelSubscribeChannelVideoList" Content="{Binding LabelSubscribeChannelVideoList}"></Label>
         <DataGrid x:Name="dataGridSubscribeChannelVideoList"
           Grid.Row="1"
-          Margin="0,10,0,0"
-          Height="380"
+          Margin="0,40,0,0"
+          Height="350"
           Width="1100"
           AutoGenerateColumns="False"
           CanUserAddRows="False"
@@ -111,7 +135,10 @@
           ItemsSource="{Binding SubscribeChannelVideoList}">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="标题" Binding="{Binding Title}" />
+                <DataGridTextColumn Header="youtube_url" Binding="{Binding Url}" />
                 <DataGridTextColumn Header="上传日期" Binding="{Binding UploadDate}" />
+                <DataGridTextColumn Header="是否已下载" Binding="{Binding IsDownload,Converter={StaticResource IsDownloadConverter}}" />
+                <DataGridTextColumn Header="是否已上传" Binding="{Binding IsUpload, Converter={StaticResource IsUploadConverter}}" />
                 <DataGridTemplateColumn Header="操作">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
@@ -121,13 +148,6 @@
                                         AncestorType={x:Type DataGrid}}}"
                                      CommandParameter="{Binding}"
                                      Content="下载"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <CheckBox x:Name="newCheckBox" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

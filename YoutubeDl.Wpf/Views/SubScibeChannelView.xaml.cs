@@ -20,8 +20,13 @@ namespace YoutubeDl.Wpf.Views
         {
             InitializeComponent();
 
+            //TODO 重新获取数据库中对应的所有数据，否则只有重新打开应用才会更新视图中的数据
+
+
             this.WhenActivated(disposables =>
             {
+                this.Bind(ViewModel, vm => vm.LabelSubscribeChannelVideoList, v => v.labelSubscribeChannelVideoList.Content).DisposeWith(disposables);
+
                 // Link and Start
                 this.BindCommand(ViewModel,
                     viewModel => viewModel.StartSubscribeCommand,

@@ -132,21 +132,6 @@ public class BackendInstance : ReactiveObject, IEnableLogger
     }
 
     // 异步读取和解析行
-    private async Task MyReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default)
-    {
-        while (true)
-        {
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (line is null)
-                return;
-
-            var loggerService = Locator.Current.GetService<LoggerService>();
-            var loggernew = loggerService.GetLogger("loggernew");
-            loggernew.Information(line);
-        }
-    }
-
-    // 异步读取和解析行
     private async Task ReadAndParseLinesAsync(StreamReader reader, CancellationToken cancellationToken = default, Serilog.ILogger logger = null)
     {
         while (true)
@@ -358,23 +343,11 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         db.SubscribeChannels.Add(new SubscribeChannel {
             Name = video_temp.Author.ChannelTitle,
             ChannelId = video_temp.Author.ChannelId,
-            SubscribeDate = ConvertToChinaStandardTime(DateTime.Now)
+            SubscribeDate = DateTimeExtensions.ConvertToChinaStandardTime(DateTime.Now)
             });
         await db.SaveChangesAsync();
 
         return result;
-    }
-
-    /// <summary>
-    /// 转换成中国标准时间（YYYY-MM-DD HH:MM:SS）
-    /// </summary>
-    /// <returns></returns>
-    private static DateTime ConvertToChinaStandardTime(DateTime input)
-    {
-        TimeZoneInfo chinaZone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
-        DateTime output = TimeZoneInfo.ConvertTimeFromUtc(input.ToUniversalTime(), chinaZone);
-        output = new DateTime(output.Year, output.Month, output.Day, output.Hour, output.Minute, output.Second);
-        return output;
     }
 
     private static async Task<string> ConverVideoUrlToChannelId(string url)
@@ -462,13 +435,31 @@ public class BackendInstance : ReactiveObject, IEnableLogger
 
         _process.StartInfo.FileName = _settings.BackendPath;
         _process.StartInfo.ArgumentList.Clear();
+        _process.StartInfo.ArgumentList.Add("--write-thumbnail"); //TODO 将壁纸转换成 png 格式的
         _process.StartInfo.ArgumentList.Add("-f bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]"); //备注：非常神奇，格式里面不能加引号，不然识别无效
-        _process.StartInfo.ArgumentList.Add("-o %(title)s"); //备注：这个也挺神奇的，如果不加后缀，会自动加上后缀，加了反而两个后缀了
         _process.StartInfo.ArgumentList.Add(link);
 
         try
         {
             await RunNormalDownloadAsync(cancellationToken);
+
+
+            using (var context = new VideoContext())
+            {
+                var video = context.Videos
+                                   .Where(v => v.Url == link)
+                                    .FirstOrDefault();
+
+                if (video != null)
+                {
+                    video.IsDownload = true; 
+                    context.SaveChanges(); 
+                }
+                else
+                {
+                    logger.Error("数据库中没有该数据");
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -494,7 +485,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
         }
     }
     /// <summary>
-    /// 订阅
+    /// 新增订阅频道
     /// </summary>
     /// <param name="link">视频链接</param>
     /// <param name="cancellationToken">取消令牌</param>
@@ -522,8 +513,23 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             channelId = await ConverVideoUrlToChannelId(link);
         }
 
+        var subscribeChannelContext = new SubscribeChannelContext();
+        var subscribeChannel = subscribeChannelContext.SubscribeChannels
+                           .Where(v => v.ChannelId == channelId)
+                            .FirstOrDefault();
+
+        if (subscribeChannel != null)
+        {
+            MessageBox.Show($"你已订阅频道：{subscribeChannel.Name}\n" +
+                $"添加订阅日期为：{subscribeChannel.SubscribeDate}\n" +
+                $"请勿重复添加",
+                "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         //获取频道的上传视频
         List<PlaylistVideo> videos = (List<PlaylistVideo>)await youtube.Channels.GetUploadsAsync(channelId);
+
 
         //弹窗
         string message =
@@ -535,6 +541,7 @@ public class BackendInstance : ReactiveObject, IEnableLogger
                                      MessageBoxButtons.YesNo,
                                      MessageBoxIcon.Question);
 
+        //将视频信息写入数据库
         foreach (PlaylistVideo video in videos)
         {
             // 获取视频详情
@@ -546,12 +553,12 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             }
 
             // 添加新的视频到数据库并保存
-            videoDB.Videos.Add(new Video
-            {
-                Title = video_temp.Title,
-                Url = video_temp.Url,
-                UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
-            });
+            videoDB.Videos.Add(new Video(video_temp));
+            //{
+            //    Title = video_temp.Title,
+            //    Url = video_temp.Url,
+            //    UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
+            //});
             await videoDB.SaveChangesAsync();
 
             // 记录视频信息
@@ -634,18 +641,13 @@ public class BackendInstance : ReactiveObject, IEnableLogger
             // 如果视频上传日期早于或等于最新日期，则跳出循环
             if (latestVideo != null)
             {
-                if (ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime) <= latestDateTime)
+                if (DateTimeExtensions.ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime) <= latestDateTime)
                 {
                     break;
                 }
                 else
                 {
-                    newerVideos.Add(new Video
-                    {
-                        Title = video_temp.Title,
-                        Url = video_temp.Url,
-                        UploadDate = ConvertToChinaStandardTime(video_temp.UploadDate.UtcDateTime)
-                    });
+                    newerVideos.Add(new Video(video_temp));
                 }
             }
         }
